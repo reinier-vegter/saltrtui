@@ -23,28 +23,17 @@ Stable releases use `vMAJOR.MINOR.PATCH` tags. Run `saltrtui --version` to check
 
 ## Install and update
 
-Release automation is configured; the first tagged release has not yet been published. Once available, download the Linux amd64 `.gz` archive and `SHA256SUMS` from the [latest GitHub Release](https://github.com/reinier-vegter/saltrtui/releases/latest). Until then, use the source build below or download the development executable from a successful [CI run](https://github.com/reinier-vegter/saltrtui/actions/workflows/ci.yml).
+Release automation is configured; the first tagged release has not yet been published. When available, open the [latest GitHub Release](https://github.com/reinier-vegter/saltrtui/releases/latest), then copy the Ubuntu 24.04 or Debian bookworm install command from the successful [release workflow run summary](https://github.com/reinier-vegter/saltrtui/actions/workflows/release.yml). Both use the Linux amd64 binary and install it to `~/.local/bin/saltrtui`. The command requires `curl`, `gzip`, and GNU coreutils. Until the first release, use the source build below.
 
-Place the release archive and manifest in a fresh directory containing only that release's downloads. Verify the compressed archive **before extracting** and install for your user:
-
-```sh
-set -e
-sha256sum -c SHA256SUMS
-gzip -d saltrtui_*_linux_amd64.gz
-mkdir -p "$HOME/.local/bin"
-install -m 755 saltrtui_*_linux_amd64 "$HOME/.local/bin/saltrtui"
-"$HOME/.local/bin/saltrtui" --version
-```
-
-Checksums detect corrupted downloads; they are not an independent signature. Add `~/.local/bin` to your shell's `PATH` if necessary:
+Add `~/.local/bin` to your shell's `PATH` if necessary:
 
 ```sh
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-Persist that setting in your own shell configuration if desired. Restart the app after replacement; an already running process keeps its old version. If your shell still selects an older copy, check `command -v saltrtui` and clear its command cache (`hash -r` in Bash).
+Persist that setting in your own shell configuration if desired. Restart the app after installation or replacement; an already running process keeps its old version.
 
-Updates are manual: repeat these steps for a newer release. Automatic update checks and in-app installation are not implemented. CI artifacts are development builds, not stable releases; unpack their ZIP and use `install -m 755 saltrtui-linux-amd64 "$HOME/.local/bin/saltrtui"`.
+Updates are manual: copy the install command from each new release's workflow summary. Automatic update checks and in-app installation are not implemented. CI artifacts are development builds, not stable releases.
 
 ## Run
 

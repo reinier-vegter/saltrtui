@@ -124,3 +124,14 @@ jobs:
             --verify-tag --draft --generate-notes --title "saltrtui $RELEASE_TAG" \
             --target "$RELEASE_COMMIT"
           gh release edit "$RELEASE_TAG" --draft=false --prerelease=false
+      - name: Print copyable Ubuntu and Debian install commands
+        env:
+          RELEASE_TAG: ${{ needs.verify-and-package.outputs.tag }}
+        run: |
+          commands=$(scripts/print-install-commands.sh "$RELEASE_TAG")
+          printf '%s\n' "$commands"
+          {
+            printf '## Install saltrtui %s\n\n' "$RELEASE_TAG"
+            printf 'Copy the command for your distribution. Requires `curl`, `gzip`, and GNU coreutils.\n\n'
+            printf '```sh\n%s\n```\n' "$commands"
+          } >> "$GITHUB_STEP_SUMMARY"

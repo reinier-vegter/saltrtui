@@ -26,7 +26,7 @@ func fixture(t *testing.T) string {
 	if err := os.MkdirAll(filepath.Join(root, "scripts"), 0755); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"validate-release-version.sh", "build-linux-amd64.sh", "package-release.sh"} {
+	for _, name := range []string{"validate-release-version.sh", "build-linux-amd64.sh", "package-release.sh", "print-install-commands.sh"} {
 		data, err := os.ReadFile(name)
 		if err != nil {
 			t.Fatal(err)
@@ -34,6 +34,107 @@ func fixture(t *testing.T) string {
 		write(t, filepath.Join(root, "scripts", name), string(data))
 	}
 	return root
+}
+
+func TestPrintInstallCommands(t *testing.T) {
+	root := fixture(t)
+	out, err := script(t, root, "print-install-commands.sh", "v1.2.3")
+	if err != nil {
+		t.Fatalf("generate commands: %v %s", err, out)
+	}
+	text := string(out)
+	for _, want := range []string{
+		"Ubuntu 24.04 (Linux amd64):",
+		"Debian bookworm (Linux amd64):",
+		"https://github.com/reinier-vegter/saltrtui/releases/download/v1.2.3/saltrtui_v1.2.3_linux_amd64.gz",
+		"curl -fL",
+		"gzip -dc",
+		"mv -fT",
+		"$HOME/.local/bin/saltrtui",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("missing %q in output:\n%s", want, text)
+		}
+	}
+	if strings.Count(text, "curl -fL") != 2 || strings.Count(text, "releases/download/v1.2.3/") != 2 {
+		t.Fatalf("expected a literal command for each distro:\n%s", text)
+	}
+	for _, forbidden := range []string{"sha256sum", "SHA256SUMS", "saltrtui_*", "<version>", "<filename>"} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("generated command contains %q:\n%s", forbidden, text)
+		}
+	}
+	for _, invalid := range []string{"dev", "v01.2.3", "v1.2.3-rc.1", "v1.2.3;touch bad"} {
+		if _, err := script(t, root, "print-install-commands.sh", invalid); err == nil {
+			t.Fatalf("invalid version %q accepted", invalid)
+		}
+	}
+
+	// Exercise the emitted shell one-liner with an isolated HOME and a local
+	// curl stub. This verifies paths with spaces, install mode, and replacement.
+	home := filepath.Join(t.TempDir(), "home with spaces")
+	if err := os.MkdirAll(home, 0755); err != nil {
+		t.Fatal(err)
+	}
+	bin := t.TempDir()
+	curlStub := `#!/bin/sh
+set -eu
+test "$1" = -fL
+shift
+test -n "$1"
+shift
+test "$1" = -o
+shift
+cp "$INSTALL_ARCHIVE" "$1"
+`
+	write(t, filepath.Join(bin, "curl"), curlStub)
+	program := filepath.Join(t.TempDir(), "saltrtui")
+	write(t, program, "#!/bin/sh\nprintf 'saltrtui v1.2.3\\n'\n")
+	archive := filepath.Join(t.TempDir(), "release.gz")
+	compress := exec.Command("gzip", "-c", program)
+	compressed, err := compress.Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(archive, compressed, 0644); err != nil {
+		t.Fatal(err)
+	}
+	command := strings.Split(text, "\n")[1]
+	if err := runInstallCommand(command, home, bin, archive); err != nil {
+		t.Fatalf("run generated installer: %v", err)
+	}
+	installed := filepath.Join(home, ".local", "bin", "saltrtui")
+	if out, err := exec.Command(installed, "--version").Output(); err != nil || string(out) != "saltrtui v1.2.3\n" {
+		t.Fatalf("installed executable: %v %q", err, out)
+	}
+	info, err := os.Stat(installed)
+	if err != nil || info.Mode().Perm() != 0755 {
+		t.Fatalf("installed permissions: %v %v", info, err)
+	}
+	staging, _ := filepath.Glob(filepath.Join(home, ".local", "bin", ".saltrtui.*"))
+	if len(staging) != 0 {
+		t.Fatalf("temporary installation files leaked: %v", staging)
+	}
+
+	// A failed download/extraction must not replace the previous working binary.
+	corrupt := filepath.Join(t.TempDir(), "corrupt.gz")
+	if err := os.WriteFile(corrupt, []byte("not gzip"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := runInstallCommand(command, home, bin, corrupt); err == nil {
+		t.Fatal("corrupt archive installed successfully")
+	}
+	if out, err := exec.Command(installed, "--version").Output(); err != nil || string(out) != "saltrtui v1.2.3\n" {
+		t.Fatalf("failed install replaced working executable: %v %q", err, out)
+	}
+}
+
+func runInstallCommand(command, home, bin, archive string) error {
+	cmd := exec.Command("sh", "-c", command)
+	cmd.Env = append(os.Environ(), "HOME="+home, "INSTALL_ARCHIVE="+archive,
+		"PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	_, err := cmd.CombinedOutput()
+	return err
 }
 
 func write(t *testing.T, path, data string) {
