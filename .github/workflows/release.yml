@@ -133,5 +133,5 @@ jobs:
           {
             printf '## Install saltrtui %s\n\n' "$RELEASE_TAG"
             printf 'Copy the command for your distribution. Requires curl, gzip, and GNU coreutils.\n\n'
-            printf '```sh\n%s\n```\n' "$commands"
+            printf '~~~sh\n%s\n~~~\n' "$commands"
           } >> "$GITHUB_STEP_SUMMARY"
