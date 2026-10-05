@@ -33,7 +33,11 @@ export PATH="$HOME/.local/bin:$PATH"
 
 Persist that setting in your own shell configuration if desired. Restart the app after installation or replacement; an already running process keeps its old version.
 
-Updates are manual: copy the install command from each new release's workflow summary. Automatic update checks and in-app installation are not implemented. CI artifacts are development builds, not stable releases.
+### Update from the TUI
+
+A stable release install checks GitHub for a newer stable release in the background (at most once per hour) and shows `vX.Y.Z available · U: update` in the Fleet header when one exists. Press `U` to review it: the running and available versions, current location, and destination are shown before anything downloads. `Enter` on the recommended choice downloads, verifies, and installs the update; `Esc` or Cancel always leave without changing anything. A writable `~/.local/bin/saltrtui` install updates in place; a protected install offers a user-local install (recommended) or an explicit sudo update. Restart saltrtui afterward; the running process keeps reporting its old version until then. Development (`dev`) builds never check or offer an update.
+
+You can still update manually at any time by copying a newer release's install command from its workflow summary. CI artifacts are development builds, not stable releases.
 
 ## Run
 

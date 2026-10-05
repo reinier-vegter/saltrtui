@@ -23,6 +23,7 @@ func TestSharedNavigationAndActionFrame(t *testing.T) {
 		{"Target", "Fleet", func(w, h int) string { return RenderTarget(TargetViewData{Width: w, Height: h}) }},
 		{"Resources", "Fleet", func(w, h int) string { return RenderGraph(GraphViewData{Width: w, Height: h}) }},
 		{"Highstate", "Fleet", func(w, h int) string { return RenderHighstate(HighstateViewData{Width: w, Height: h}) }},
+		{"Update", "Fleet", func(w, h int) string { return RenderSelfUpdate(UpdateViewData{Width: w, Height: h}) }},
 	}
 	for _, view := range views {
 		for _, w := range []int{120, 80, 36, 20, 5, 1} {

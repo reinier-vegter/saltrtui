@@ -8,6 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"saltrtui/internal/app"
+	"saltrtui/internal/cache"
 	"saltrtui/internal/saltcli"
 )
 
@@ -34,7 +35,11 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 	backend := saltcli.New(*configDir)
-	model := app.NewWithHighstate(backend, backend, backend, backend, backend, backend, backend, *configDir, !*noAltScreen)
+	updateStore, err := cache.NewStore()
+	if err != nil {
+		updateStore = nil
+	}
+	model := app.NewWithUpdates(backend, backend, backend, backend, backend, backend, backend, *configDir, !*noAltScreen, version, updateStore)
 	defer model.Close()
 	result, err := tea.NewProgram(model).Run()
 	if stopped, ok := result.(app.Model); ok {

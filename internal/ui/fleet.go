@@ -34,14 +34,16 @@ type ViewData struct {
 	Inventory, Presence, Detail                      Source
 	Connected, NotObserved                           int
 	Grains                                           map[string]any
+	RunningVersion, AvailableUpdate                  string
 }
 
 var (
-	accent   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("39"))
-	muted    = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
-	item     = lipgloss.NewStyle().Foreground(lipgloss.Color("7"))
-	failure  = lipgloss.NewStyle().Foreground(lipgloss.Color("203"))
-	selected = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("0")).Background(lipgloss.Color("39"))
+	accent      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("39"))
+	muted       = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	item        = lipgloss.NewStyle().Foreground(lipgloss.Color("7"))
+	failure     = lipgloss.NewStyle().Foreground(lipgloss.Color("203"))
+	selected    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("0")).Background(lipgloss.Color("39"))
+	noticeStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("214"))
 )
 
 func clean(s string) string {
@@ -437,6 +439,7 @@ func helpLines(width int) []string {
 		"tab/shift+tab  switch panels",
 		"esc            close search or return to Targets",
 		"r              refresh keys and presence",
+		"U              review and install an available update",
 		"?              close help", "q              quit", "",
 		"Grains inspection sends a read-only Salt job.",
 	}, width)
@@ -448,6 +451,10 @@ func Render(v ViewData) string {
 		return ""
 	}
 	hints := []hint{{"h", "highstate"}, {"s", "console"}, {"g", "graph"}, {"t", "targets"}, {"/", "search"}, {"enter", "inspect"}, {"tab", "panel"}, {"r", "refresh"}, {"?", "help"}, {"q", "quit"}}
+	showUpdate := v.AvailableUpdate != "" && !v.Searching && !v.DetailSearching
+	if showUpdate {
+		hints = append(hints, hint{"U", "update"})
+	}
 	notice := ""
 	alert := false
 	if v.Searching {
@@ -469,7 +476,12 @@ func Render(v ViewData) string {
 		return actionBar(w, notice, alert, hints...)
 	}
 	frame := []string{modeBar(w, "Fleet", v.Context, "")}
-	if h >= 4 {
+	noticeLine := h >= 3 && showUpdate
+	if noticeLine {
+		label := " " + noticeStyle.Render(v.AvailableUpdate+" available") + "  " + keycap.Render("U") + item.Render(": update")
+		frame = append(frame, chromeLine(w, label))
+	}
+	if h >= 4+len(frame)-1 {
 		frame = append(frame, muted.Render(strings.Repeat("─", w)))
 	}
 	bodyHeight := h - len(frame) - 1

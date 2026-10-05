@@ -6,6 +6,7 @@ import (
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"saltrtui/internal/cache"
 	"saltrtui/internal/console"
 	"saltrtui/internal/events"
 	"saltrtui/internal/fleet"
@@ -13,6 +14,7 @@ import (
 	"saltrtui/internal/jobs"
 	"saltrtui/internal/keys"
 	"saltrtui/internal/metrics"
+	"saltrtui/internal/release"
 	"saltrtui/internal/ui"
 )
 
@@ -109,6 +111,18 @@ type Model struct {
 	keys                                                fleet.Observation[[]string]
 	presence                                            fleet.Observation[[]string]
 	details                                             map[string]detail
+	version                                             string
+	updateStore                                         *cache.Store
+	installation                                        release.Installation
+	availableUpdate                                     string
+	updateInstalled                                     bool
+	updateIndex                                         int
+	updatePhase                                         string
+	updateText                                          string
+	updateGeneration                                    int
+	updateCancel                                        func()
+	updateDestination                                   string
+	updateSudo                                          bool
 }
 
 func New(backend fleet.Gateway, configDir string, altScreen bool) Model {
@@ -136,6 +150,13 @@ func NewWithKeys(backend fleet.Gateway, jobBackend jobs.Gateway, consoleBackend 
 }
 
 func NewWithHighstate(backend fleet.Gateway, jobBackend jobs.Gateway, consoleBackend console.Gateway, eventBackend events.Gateway, metricBackend metrics.Gateway, keyBackend keys.Gateway, highstateBackend highstate.Gateway, configDir string, altScreen bool) Model {
+	return NewWithUpdates(backend, jobBackend, consoleBackend, eventBackend, metricBackend, keyBackend, highstateBackend, configDir, altScreen, "dev", nil)
+}
+
+// NewWithUpdates is the full constructor: version and updateStore enable the
+// background release check and in-app updater. Callers without either value
+// get a Model that never advertises or performs an update.
+func NewWithUpdates(backend fleet.Gateway, jobBackend jobs.Gateway, consoleBackend console.Gateway, eventBackend events.Gateway, metricBackend metrics.Gateway, keyBackend keys.Gateway, highstateBackend highstate.Gateway, configDir string, altScreen bool, version string, updateStore *cache.Store) Model {
 	if configDir == "" {
 		configDir = "Salt defaults"
 	}
@@ -152,7 +173,8 @@ func NewWithHighstate(backend fleet.Gateway, jobBackend jobs.Gateway, consoleBac
 	jobInput.Placeholder = "filter jobs"
 	jobInput.SetWidth(24)
 	m := Model{backend: backend, jobBackend: jobBackend, consoleBackend: consoleBackend, eventBackend: eventBackend, metricBackend: metricBackend, keyBackend: keyBackend, highstateBackend: highstateBackend, key: newKeyState(), event: newEventState(), consoles: make(map[string]*consoleState), jobSearch: jobInput, jobDetails: make(map[string]jobDetail), context: configDir, altScreen: altScreen, search: input, detailSearch: grainInput, details: make(map[string]detail),
-		keys: fleet.Observation[[]string]{Busy: true}, presence: fleet.Observation[[]string]{Busy: true}}
+		keys: fleet.Observation[[]string]{Busy: true}, presence: fleet.Observation[[]string]{Busy: true},
+		version: version, updateStore: updateStore}
 	m.workCtx, m.workCancel = context.WithCancel(context.Background())
 	if eventBackend != nil {
 		m.event.lifetime, m.event.lifetimeCancel = context.WithCancel(context.Background())
@@ -333,7 +355,7 @@ func (m Model) updateJobs(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.refreshCmds(), m.eventStartCmd())
+	return tea.Batch(m.refreshCmds(), m.eventStartCmd(), m.updateCheckCmd())
 }
 
 // Close releases the long-lived listener even when Run stops without a keypress.
@@ -448,6 +470,9 @@ func (m *Model) inspect() tea.Cmd {
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if updated, cmd, handled := m.updateResult(msg); handled {
+		return updated, cmd
+	}
 	if updated, cmd, handled := m.highstateResult(msg); handled {
 		return updated, cmd
 	}
@@ -600,6 +625,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.activeView == 7 {
 			return m.updateHighstate(msg)
 		}
+		if m.activeView == 8 {
+			return m.updateSelfUpdate(msg)
+		}
 		if m.activeView == 6 {
 			return m.updateKeys(msg)
 		}
@@ -661,6 +689,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if key == "6" && !m.help {
 			return m, m.openKeys()
+		}
+		if key == "U" && !m.help && m.availableUpdate != "" {
+			return m, m.openSelfUpdate()
 		}
 		switch key {
 		case "q":
@@ -763,7 +794,8 @@ func (m Model) viewData() ui.ViewData {
 		Inventory: ui.Source{Count: len(m.keys.Value), At: m.keys.At, Err: m.keys.Err, Busy: m.keys.Busy},
 		Presence:  ui.Source{At: m.presence.At, Err: m.presence.Err, Busy: m.presence.Busy},
 		Selected:  m.selected, Grains: entry.observation.Value,
-		Detail: ui.Source{At: entry.observation.At, Err: entry.observation.Err, Busy: entry.observation.Busy},
+		Detail:         ui.Source{At: entry.observation.At, Err: entry.observation.Err, Busy: entry.observation.Busy},
+		RunningVersion: m.version, AvailableUpdate: m.availableUpdate,
 	}
 	if !m.presence.At.IsZero() && m.presence.Err == nil && !m.presence.Busy {
 		for _, id := range m.keys.Value {
@@ -787,7 +819,9 @@ func (m Model) viewData() ui.ViewData {
 
 func (m Model) View() tea.View {
 	var content string
-	if m.activeView == 7 {
+	if m.activeView == 8 {
+		content = ui.RenderSelfUpdate(m.updateViewData())
+	} else if m.activeView == 7 {
 		content = ui.RenderHighstate(m.highstateViewData())
 	} else if m.activeView == 6 {
 		content = ui.RenderKeys(m.keysViewData())

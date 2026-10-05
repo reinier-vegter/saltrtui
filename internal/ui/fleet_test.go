@@ -200,3 +200,42 @@ func TestSelectedRowSurvivesShortResize(t *testing.T) {
 		}
 	}
 }
+
+func TestUpdateNoticeIsCompactAndHiddenWhileSearching(t *testing.T) {
+	data := ViewData{Width: 200, Height: 20, RunningVersion: "v1.2.3", AvailableUpdate: "v1.2.4"}
+	view := ansi.Strip(Render(data))
+	lines := strings.Split(view, "\n")
+	if !strings.Contains(lines[1], "v1.2.4 available") || !strings.Contains(lines[1], "U: update") {
+		t.Fatalf("update notice missing from its own header row:\n%s", view)
+	}
+	if strings.Contains(lines[len(lines)-1], "warning") {
+		t.Fatalf("notice must not read as a warning banner")
+	}
+	if !strings.Contains(lines[len(lines)-1], "U: update") {
+		t.Fatalf("footer should advertise the update shortcut:\n%s", view)
+	}
+	data.Searching = true
+	view = ansi.Strip(Render(data))
+	if strings.Contains(view, "available") || strings.Contains(view, "U: update") {
+		t.Fatalf("a focused search must not advertise the update action:\n%s", view)
+	}
+}
+
+func TestUpdateNoticeNeverBreaksFixedWidthOrHeight(t *testing.T) {
+	data := ViewData{RunningVersion: "v1.2.3", AvailableUpdate: "v1.2.4"}
+	for _, width := range []int{120, 80, 36, 20, 5, 1} {
+		for _, height := range []int{20, 8, 4, 3, 2, 1} {
+			data.Width, data.Height = width, height
+			view := Render(data)
+			lines := strings.Split(view, "\n")
+			if len(lines) != height {
+				t.Fatalf("%dx%d: got %d rows", width, height, len(lines))
+			}
+			for _, line := range lines {
+				if cells := lipgloss.Width(line); cells != width {
+					t.Fatalf("%dx%d: row is %d cells: %q", width, height, cells, ansi.Strip(line))
+				}
+			}
+		}
+	}
+}
