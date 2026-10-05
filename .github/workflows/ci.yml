@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  GOWORK: 'off'
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Download dependencies
+        run: go mod download
+      - name: Validate workflows
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+      - name: Coverage and verification gate
+        run: |
+          mkdir -p dist
+          go test -coverprofile=dist/coverage.out ./...
+          scripts/verify.sh
+      - name: Smoke-test development executable
+        run: |
+          test "$(dist/saltrtui-linux-amd64 --version)" = 'saltrtui dev'
+          go version -m dist/saltrtui-linux-amd64 > dist/build-metadata.txt
+          grep -q 'GOOS=linux' dist/build-metadata.txt
+          grep -q 'GOARCH=amd64' dist/build-metadata.txt
+          grep -q 'CGO_ENABLED=0' dist/build-metadata.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: saltrtui-linux-amd64-dev
+          path: dist/saltrtui-linux-amd64
+          if-no-files-found: error
+          retention-days: 14

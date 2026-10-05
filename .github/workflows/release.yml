@@ -1,0 +1,126 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GOWORK: 'off'
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  verify-and-package:
+    # Linux amd64 is the only supported release target.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      commit: ${{ steps.version.outputs.commit }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Validate stable tag
+        id: version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          scripts/validate-release-version.sh "$RELEASE_TAG"
+          printf 'tag=%s\n' "$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          printf 'commit=%s\n' "$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Download dependencies
+        run: go mod download
+      - name: Validate workflows
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+      - name: Coverage and verification gate on tagged source
+        run: |
+          mkdir -p dist
+          go test -coverprofile=dist/coverage.out ./...
+          scripts/verify.sh
+      - name: Package verified Linux amd64 release
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        run: scripts/package-release.sh "$RELEASE_TAG"
+      - name: Smoke-test extracted executable in Linux environments
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          gzip -dc "dist/release/$RELEASE_TAG/saltrtui_${RELEASE_TAG}_linux_amd64.gz" > dist/smoke-saltrtui
+          chmod 755 dist/smoke-saltrtui
+          test "$(dist/smoke-saltrtui --version)" = "saltrtui $RELEASE_TAG"
+          for image in ubuntu:24.04 debian:bookworm-slim; do
+            result=$(docker run --rm --network none --platform linux/amd64 \
+              --mount "type=bind,src=$PWD/dist/smoke-saltrtui,dst=/saltrtui,readonly" \
+              "$image" /saltrtui --version)
+            test "$result" = "saltrtui $RELEASE_TAG"
+          done
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-assets
+          path: |
+            dist/release/${{ steps.version.outputs.tag }}/saltrtui_${{ steps.version.outputs.tag }}_linux_amd64.gz
+            dist/release/${{ steps.version.outputs.tag }}/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    needs: verify-and-package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ needs.verify-and-package.outputs.tag }}
+      RELEASE_COMMIT: ${{ needs.verify-and-package.outputs.commit }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.verify-and-package.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: release-assets
+          path: release-assets
+      - name: Verify assets, tag, and absence of an existing release
+        run: |
+          scripts/validate-release-version.sh "$RELEASE_TAG"
+          git fetch --no-tags origin "refs/tags/$RELEASE_TAG"
+          test "$(git rev-parse 'FETCH_HEAD^{commit}')" = "$RELEASE_COMMIT"
+          cd release-assets
+          archive="saltrtui_${RELEASE_TAG}_linux_amd64.gz"
+          test "$(find . -mindepth 1 -maxdepth 1 -type f | wc -l)" -eq 2
+          test "$(wc -l < SHA256SUMS)" -eq 1
+          test "$(cat SHA256SUMS)" = "$(sha256sum "$archive")"
+          sha256sum -c SHA256SUMS
+          gzip -t "$archive"
+          releases=$(gh api --paginate --slurp "repos/$GH_REPO/releases")
+          existing=$(printf '%s' "$releases" | jq -r --arg tag "$RELEASE_TAG" \
+            '.[][] | select(.tag_name == $tag) | .tag_name')
+          if [ -n "$existing" ]; then
+            echo 'Release or draft already exists; inspect it before cleanup/rerun. Nothing overwritten.' >&2
+            exit 1
+          fi
+      - name: Upload to a draft and publish only after uploads succeed
+        working-directory: release-assets
+        run: |
+          gh release create "$RELEASE_TAG" \
+            "saltrtui_${RELEASE_TAG}_linux_amd64.gz" SHA256SUMS \
+            --verify-tag --draft --generate-notes --title "saltrtui $RELEASE_TAG" \
+            --target "$RELEASE_COMMIT"
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease=false
