@@ -201,18 +201,23 @@ func (m *Model) keysResult(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				m.key.status = "Key action sent; verification unavailable. Refresh keys to check its state."
 			} else {
 				verified := m.key.verifyAction == keys.Revoke
+				matches := 0
 				for _, item := range value.items {
 					if item.ID != m.key.verifyKey.ID {
 						continue
 					}
+					matches++
 					switch m.key.verifyAction {
 					case keys.Accept:
 						verified = item.State == keys.Accepted
 					case keys.Block:
 						verified = item.State == keys.Rejected
 					case keys.Revoke:
-						verified = item.State != keys.Accepted
+						verified = verified && item.State != keys.Accepted
 					}
+				}
+				if m.key.verifyAction != keys.Revoke {
+					verified = verified && matches == 1
 				}
 				if verified {
 					m.key.status = fmt.Sprintf("%s %s verified in refreshed keys", m.key.verifyAction, m.key.verifyKey.ID)
@@ -229,9 +234,12 @@ func (m *Model) keysResult(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			return *m, nil, true
 		}
 		entry.value.Busy, entry.value.Err = false, value.err
-		entry.value.Value = value.detail
 		if value.err == nil {
+			entry.value.Value = value.detail
 			entry.value.At = value.at
+		} else if entry.value.At.IsZero() {
+			// A first failed fingerprint read may still provide a file-time hint.
+			entry.value.Value = value.detail
 		}
 		m.key.details[value.key] = entry
 		if m.key.selected == value.key {

@@ -92,6 +92,10 @@ func (m *Model) applyHighstate() tea.Cmd {
 	if !m.canApplyHighstate() || !s.confirm || m.highstateBackend == nil {
 		return nil
 	}
+	if !ui.HighstateConfirmationFits(m.highstateViewData()) {
+		s.status = "Resize to review the target and consequence before Apply; n/esc cancels"
+		return nil
+	}
 	m.highstateRequest++
 	s.request = m.highstateRequest
 	s.busy, s.confirm, s.attempted = true, false, true

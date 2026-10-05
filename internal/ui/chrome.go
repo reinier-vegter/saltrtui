@@ -61,14 +61,44 @@ func actionBar(width int, notice string, alert bool, hints ...hint) string {
 	if width <= 0 {
 		return ""
 	}
-	// Keep the recovery action and some of the diagnostic legible on a narrow
-	// terminal instead of clipping the entire diagnostic behind optional hints.
-	if alert && notice != "" && width < 70 && len(hints) > 1 {
-		hints = hints[:1]
+	budget := width - 3 // frame edges and initial space
+	if notice != "" {
+		budget -= min(30, max(0, budget/3))
+	}
+	chosen := make([]bool, len(hints))
+	used := 0
+	choose := func(i int) {
+		if chosen[i] {
+			return
+		}
+		cells := ansi.StringWidth(hints[i].key + ": " + hints[i].label)
+		if used > 0 {
+			cells += 2
+		}
+		if used+cells <= budget {
+			chosen[i], used = true, used+cells
+		}
+	}
+	// Recovery and safe exits must survive ahead of optional task shortcuts.
+	if alert && len(hints) > 0 {
+		choose(0)
+	}
+	for i, h := range hints {
+		if strings.Contains(h.key, "esc") || strings.Contains(h.key, "Esc") || strings.Contains(h.key, "?") || h.key == "q" || h.key == "ctrl+c" {
+			choose(i)
+		}
+	}
+	for i := range hints {
+		choose(i)
 	}
 	parts := make([]string, 0, len(hints)+1)
-	for _, h := range hints {
-		parts = append(parts, keycap.Render(h.key)+item.Render(" "+h.label))
+	for i, h := range hints {
+		if chosen[i] {
+			parts = append(parts, keycap.Render(h.key)+item.Render(": "+h.label))
+		}
+	}
+	if len(parts) == 0 && len(hints) > 0 {
+		return chromeLine(width, " Resize")
 	}
 	if notice != "" {
 		label := "  │  " + clean(notice)

@@ -133,7 +133,25 @@ func RenderKeys(v KeysViewData) string {
 	if w == 0 || h == 0 {
 		return ""
 	}
-	hints := []hint{{"a", "accept"}, {"b", "block"}, {"d", "deny/revoke"}, {"/", "search"}, {"enter", "details"}, {"r", "refresh"}, {"?", "help"}, {"q", "quit"}}
+	hints := []hint{}
+	if !v.Busy && !v.List.Busy && v.List.Err == nil && !v.Ambiguous {
+		switch v.Selected.State {
+		case "pending":
+			hints = append(hints, hint{"a", "accept"}, hint{"b", "block"})
+		case "accepted":
+			hints = append(hints, hint{"d", "deny/revoke"})
+		}
+	}
+	if v.Focus == 0 {
+		hints = append(hints, hint{"/", "search"})
+	}
+	if v.Selected.ID != "" {
+		hints = append(hints, hint{"enter", "details"})
+	}
+	if !v.Busy && !v.List.Busy {
+		hints = append(hints, hint{"r", "refresh"})
+	}
+	hints = append(hints, hint{"?", "help"}, hint{"q", "quit"})
 	notice := ""
 	alert := false
 	switch {

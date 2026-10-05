@@ -18,6 +18,38 @@ type fakeHighstate struct {
 	applyErr       error
 }
 
+func TestHighstateApplyRechecksTerminalFit(t *testing.T) {
+	backend := &fakeHighstate{}
+	m := highstateModel(backend)
+	defer m.Close()
+	m = press(m, 'h')
+	model, preview := m.Update(tea.KeyPressMsg{Code: 'p'})
+	m = update(model.(Model), preview())
+	m = press(m, 'a')
+	for _, size := range []tea.WindowSizeMsg{{Width: 80, Height: 8}, {Width: 20, Height: 30}} {
+		m = update(m, size)
+		model, apply := m.Update(tea.KeyPressMsg{Code: 'y'})
+		m = model.(Model)
+		if apply != nil || m.highstate.busy || !m.highstate.confirm || backend.apply != 0 {
+			t.Fatal("Apply dispatched without visible confirmation facts")
+		}
+	}
+	m = press(m, tea.KeyEscape)
+	if m.highstate.confirm || backend.apply != 0 {
+		t.Fatal("undersized confirmation could not cancel safely")
+	}
+	m = update(m, tea.WindowSizeMsg{Width: 36, Height: 18})
+	m = press(m, 'a')
+	model, apply := m.Update(tea.KeyPressMsg{Code: 'y'})
+	if apply == nil {
+		t.Fatal("fitting narrow confirmation blocked Apply")
+	}
+	m = update(model.(Model), apply())
+	if backend.apply != 1 {
+		t.Fatal("fitting confirmation failed to dispatch once")
+	}
+}
+
 func (f *fakeHighstate) Preview(context.Context, string) (highstate.Report, error) {
 	f.preview++
 	return highstate.Report{Steps: []highstate.Step{{ID: "pkg_|-baseline", Changes: json.RawMessage(`{"new":"yes"}`)}}, Proposed: 1}, nil

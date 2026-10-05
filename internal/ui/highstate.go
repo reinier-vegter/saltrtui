@@ -42,6 +42,12 @@ func highstateReportLines(title string, report HighstateReport) []string {
 }
 
 func highstateLines(v HighstateViewData, width int) []string {
+	if v.Confirm {
+		if !HighstateConfirmationFits(v) {
+			return styledLines([]string{"Resize to review Apply; n/esc cancels."}, width)
+		}
+		return highstateConfirmationLines(v, width)
+	}
 	lines := []string{
 		"Minion: " + v.ID,
 		"Master config: " + v.Context,
@@ -55,10 +61,6 @@ func highstateLines(v HighstateViewData, width int) []string {
 			"CLI timeouts do not prove a remote state run stopped.",
 			"Results can contain sensitive state changes; no automatic retries.")
 		return styledLines(lines, width)
-	}
-	if v.Confirm {
-		lines = append(lines, "CONFIRM state.highstate APPLY on "+v.ID,
-			"This can change the minion; the accepted key is rechecked first.", "Press y to dispatch once, n/esc to cancel.", "")
 	}
 	lines = append(lines, sourceLine("Preview", v.Preview))
 	if v.Preview.Busy {
@@ -93,6 +95,22 @@ func highstateLines(v HighstateViewData, width int) []string {
 	return styledLines(lines, width)
 }
 
+func highstateConfirmationLines(v HighstateViewData, width int) []string {
+	return styledLines([]string{
+		"CONFIRM state.highstate APPLY on " + v.ID,
+		"Master config: " + v.Context,
+		"This can change the minion; the accepted key is rechecked first.",
+		"Press y to dispatch once, n/esc to cancel.",
+	}, width)
+}
+
+// HighstateConfirmationFits is shared by rendering and dispatch. Confirmation
+// must expose the entire target/consequence and both intact footer controls.
+func HighstateConfirmationFits(v HighstateViewData) bool {
+	return v.Width >= len("y: apply once  n/esc: cancel")+3 && v.Height >= 7 &&
+		len(highstateConfirmationLines(v, v.Width-4)) <= v.Height-6
+}
+
 func HighstateScrollLimit(v HighstateViewData) int {
 	if v.Width < 6 || v.Height < 6 {
 		return 0
@@ -108,6 +126,9 @@ func RenderHighstate(v HighstateViewData) string {
 	hints := []hint{{"p", "preview"}, {"a", "review apply"}, {"↑↓", "scroll"}, {"esc", "Fleet"}, {"?", "help"}}
 	if v.Confirm {
 		hints = []hint{{"y", "apply once"}, {"n/esc", "cancel"}}
+		if !HighstateConfirmationFits(v) {
+			hints = []hint{{"n/esc", "cancel"}}
+		}
 	} else if v.Busy {
 		hints = []hint{{"↑↓", "scroll"}, {"esc", "wait for result"}}
 	} else if v.Help {
@@ -115,9 +136,17 @@ func RenderHighstate(v HighstateViewData) string {
 	} else if !v.CanApply {
 		hints = []hint{{"p", "preview"}, {"↑↓", "scroll"}, {"esc", "Fleet"}, {"?", "help"}}
 	}
-	alert := v.Status != "" && !v.Busy
+	notice := v.Status
+	if v.Confirm {
+		// Confirmation facts own the body; diagnostics cannot crowd its controls.
+		notice = ""
+		if !HighstateConfirmationFits(v) {
+			notice = "Resize to review Apply"
+		}
+	}
+	alert := notice != "" && !v.Busy
 	if h == 1 {
-		return actionBar(w, v.Status, alert, hints...)
+		return actionBar(w, notice, alert, hints...)
 	}
 	frame := []string{modeBar(w, "Fleet", v.Context, "Highstate · "+v.ID)}
 	if h >= 4 {
@@ -130,8 +159,12 @@ func RenderHighstate(v HighstateViewData) string {
 		} else if v.Help {
 			name = "Highstate help"
 		}
-		frame = append(frame, strings.Split(panel(name, highstateLines(v, max(0, w-4)), v.Offset, w, bodyHeight, true, nil), "\n")...)
+		offset := v.Offset
+		if v.Confirm {
+			offset = 0
+		}
+		frame = append(frame, strings.Split(panel(name, highstateLines(v, max(0, w-4)), offset, w, bodyHeight, true, nil), "\n")...)
 	}
-	frame = append(frame, actionBar(w, v.Status, alert, hints...))
+	frame = append(frame, actionBar(w, notice, alert, hints...))
 	return strings.Join(frame, "\n")
 }

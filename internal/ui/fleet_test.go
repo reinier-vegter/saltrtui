@@ -81,7 +81,7 @@ func TestScrollablePanelsKeepFooterAndRevealLowerContent(t *testing.T) {
 	}
 	data.DetailOffset = 99
 	bottom := ansi.Strip(Render(data))
-	if !strings.Contains(bottom, "Grains: checked") || !strings.Contains(bottom, "q quit") {
+	if !strings.Contains(bottom, "Grains: checked") || !strings.Contains(bottom, "q: quit") {
 		t.Fatalf("scrolling should reveal last details line without losing footer:\n%s", bottom)
 	}
 	foundKernel := false
@@ -119,7 +119,7 @@ func TestAdditionalGrainsAreSortedNestedAndScrollIntoView(t *testing.T) {
 	for offset := 0; offset <= ScrollLimit(data, 2); offset++ {
 		data.DetailOffset = offset
 		view := ansi.Strip(Render(data))
-		if strings.Contains(view, "roles") && strings.Contains(view, "q quit") {
+		if strings.Contains(view, "roles") && strings.Contains(view, "q: quit") {
 			found = true
 			break
 		}
