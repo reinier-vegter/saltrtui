@@ -610,6 +610,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.assignments.filter.SetWidth(max(1, min(32, ui.TargetWidth(m.width)-4)))
 		}
 	case tea.PasteMsg:
+		if m.graph.open {
+			return m, nil
+		}
 		if m.activeView == 9 {
 			return m.updateAssignments(msg)
 		}
@@ -659,7 +662,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.activeView == 6 {
 			return m.updateKeys(msg)
 		}
-		if m.activeView == 5 {
+		if m.graph.open {
 			return m.updateGraph(msg)
 		}
 		if m.activeView == 4 {
@@ -858,8 +861,6 @@ func (m Model) View() tea.View {
 		content = ui.RenderHighstate(m.highstateViewData())
 	} else if m.activeView == 6 {
 		content = ui.RenderKeys(m.keysViewData())
-	} else if m.activeView == 5 {
-		content = ui.RenderGraph(m.graphViewData())
 	} else if m.activeView == 4 {
 		content = ui.RenderEvents(m.eventsViewData())
 	} else if m.activeView == 3 {
@@ -870,6 +871,9 @@ func (m Model) View() tea.View {
 		content = ui.RenderConsole(m.consoleViewData(m.consoleID))
 	} else {
 		content = ui.Render(m.viewData())
+	}
+	if m.graph.open {
+		content = ui.RenderGraphOverlay(content, m.graphViewData())
 	}
 	view := tea.NewView(content)
 	view.AltScreen = m.altScreen

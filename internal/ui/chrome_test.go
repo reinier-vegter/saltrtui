@@ -22,7 +22,6 @@ func TestSharedNavigationAndActionFrame(t *testing.T) {
 		{"Keys", "Keys", func(w, h int) string { return RenderKeys(KeysViewData{Width: w, Height: h}) }},
 		{"Console", "Fleet", func(w, h int) string { return RenderConsole(ConsoleViewData{Width: w, Height: h}) }},
 		{"Target", "Fleet", func(w, h int) string { return RenderTarget(TargetViewData{Width: w, Height: h}) }},
-		{"Resources", "Fleet", func(w, h int) string { return RenderGraph(GraphViewData{Width: w, Height: h}) }},
 		{"Highstate", "Fleet", func(w, h int) string { return RenderHighstate(HighstateViewData{Width: w, Height: h}) }},
 		{"Update", "Fleet", func(w, h int) string { return RenderSelfUpdate(UpdateViewData{Width: w, Height: h}) }},
 	}

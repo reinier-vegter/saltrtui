@@ -13,6 +13,14 @@
 - Browse accepted minions, observed presence, and minion-reported grains.
 - Explicitly inspect highstate top-file state assignments across the accepted fleet.
 - Inspect cached jobs and returns; follow live master events and one minion's resource readings.
+
+Fleet `g` opens CPU, memory, I/O wait and load plots in a centered pop-over;
+`Esc` closes it without losing Fleet context. `Space` pauses/resumes and `r`
+samples immediately when idle. Linux metrics use one compound Salt job per
+sample, preferring `ps` when psutil is already installed and otherwise using
+built-in `status` functions. The target interval is two seconds (up to 30 jobs
+per minute for the watched minion); slow requests never overlap, and failed
+polls back off. History is in-memory only, bounded to five minutes/300 samples.
 - Preview target IDs and run finite commands against a selected minion.
 - Review and explicitly confirm minion key changes or a selected minion's highstate.
 
