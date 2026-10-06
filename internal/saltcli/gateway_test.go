@@ -9,6 +9,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"saltrtui/internal/assignments"
 )
 
 func TestFleetCommandsAndResponses(t *testing.T) {
@@ -22,6 +24,9 @@ func TestFleetCommandsAndResponses(t *testing.T) {
 		case "salt-run":
 			return []byte(`["web-02"]`), nil
 		case "salt":
+			if strings.Contains(strings.Join(args, " "), "state.show_top") {
+				return []byte(`{"web-01":{"base":["baseline","apps.web"]},"web-02":{"base":["baseline"]}}`), nil
+			}
 			return []byte(`{"web-01":{"os":"Ubuntu","osrelease":"24.04","kernel":"Linux","roles":["web","api"],"site":{"rack":13,"active":true}}}`), nil
 		}
 		return nil, errors.New("unexpected command")
@@ -38,13 +43,39 @@ func TestFleetCommandsAndResponses(t *testing.T) {
 	if err != nil || grains["os"] != "Ubuntu" || grains["kernel"] != "Linux" || grains["site"].(map[string]any)["rack"] != json.Number("13") {
 		t.Fatalf("grains: %+v, %v", grains, err)
 	}
+	top, err := g.ReadStateTop(context.Background(), []string{"web-02", "web-01"})
+	if err != nil || !reflect.DeepEqual(top, assignments.Top{"web-01": {"base": {"baseline", "apps.web"}}, "web-02": {"base": {"baseline"}}}) {
+		t.Fatalf("state assignments: %+v, %v", top, err)
+	}
 	want := [][]string{
 		{"salt-key", "-c", "/etc/salt", "--list", "accepted", "--out=json", "--no-color"},
 		{"salt-run", "-c", "/etc/salt", "manage.present", "--out=json", "--no-color"},
 		{"salt", "-c", "/etc/salt", "-L", "web-01", "grains.items", "sanitize=True", "--timeout=5", "--static", "--out=json", "--no-color"},
+		{"salt", "-c", "/etc/salt", "-L", "web-01,web-02", "state.show_top", "--timeout=30", "--static", "--out=json", "--no-color"},
 	}
 	if !reflect.DeepEqual(calls, want) {
 		t.Fatalf("command arrays: got %v want %v", calls, want)
+	}
+}
+
+func TestStateAssignmentsRejectUnexpectedAndInvalidReturns(t *testing.T) {
+	for _, body := range []string{
+		`null`, `[]`, `{"other":{"base":["baseline"]}}`, `{"web-01":null}`,
+		`{"web-01":{"":[]}}`, `{"web-01":{"base":null}}`, `{"web-01":{"base":[""]}}`,
+	} {
+		g := New("")
+		g.run = func(context.Context, string, ...string) ([]byte, error) { return []byte(body), nil }
+		if _, err := g.ReadStateTop(context.Background(), []string{"web-01"}); err == nil {
+			t.Fatalf("accepted invalid state assignment response %s", body)
+		}
+	}
+	g := New("")
+	g.run = func(context.Context, string, ...string) ([]byte, error) {
+		t.Fatal("empty inventory should not spawn Salt")
+		return nil, nil
+	}
+	if top, err := g.ReadStateTop(context.Background(), nil); err != nil || len(top) != 0 {
+		t.Fatalf("empty inventory = %#v, %v", top, err)
 	}
 }
 

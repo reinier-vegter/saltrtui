@@ -337,6 +337,8 @@ func (m Model) updateKeys(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.jobList.At.IsZero() && m.jobList.Err == nil {
 				return m, m.loadJobs()
 			}
+		case "3":
+			return m, m.openAssignments()
 		case "4":
 			return m, m.openEvents()
 		case "?":

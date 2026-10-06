@@ -14,11 +14,17 @@ import (
 	"strings"
 	"unicode"
 
+	"saltrtui/internal/assignments"
 	"saltrtui/internal/fleet"
 	"saltrtui/internal/jobs"
 )
 
 const outputLimit = 4 << 20
+
+const (
+	maxStateTopTargets = 512
+	maxStateTopArgSize = 64 << 10
+)
 
 var jidPattern = regexp.MustCompile(`^[0-9]{14,24}$`)
 
@@ -193,6 +199,60 @@ func (g *Gateway) ReadSelectedGrains(ctx context.Context, id string) (fleet.Grai
 		return nil, errors.New("selected grains: unexpected trailing minion return")
 	}
 	return fields, nil
+}
+
+// ReadStateTop reads the selected highstate top data for an exact, bounded
+// accepted-key scope. It is a remote read job, not a master cache lookup.
+func (g *Gateway) ReadStateTop(ctx context.Context, ids []string) (assignments.Top, error) {
+	ids = fleet.SortUnique(ids)
+	if len(ids) == 0 {
+		return assignments.Top{}, nil
+	}
+	if len(ids) > maxStateTopTargets {
+		return nil, fmt.Errorf("state assignments: inventory has %d minions; limit is %d", len(ids), maxStateTopTargets)
+	}
+	for _, id := range ids {
+		if !validID(id) {
+			return nil, errors.New("state assignments: minion ID cannot be targeted safely as a list item")
+		}
+	}
+	target := strings.Join(ids, ",")
+	if len(target) > maxStateTopArgSize {
+		return nil, errors.New("state assignments: minion target is too large")
+	}
+	data, err := g.invoke(ctx, "salt", "-L", target, "state.show_top", "--timeout=30", "--static", "--out=json", "--no-color")
+	if err != nil {
+		return nil, fmt.Errorf("state assignments: %w", err)
+	}
+	var response map[string]map[string][]string
+	if err := decode(data, &response); err != nil || response == nil {
+		if err == nil {
+			err = errors.New("missing minion return map")
+		}
+		return nil, fmt.Errorf("state assignments: %w", err)
+	}
+	requested := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		requested[id] = true
+	}
+	result := make(assignments.Top, len(response))
+	for id, environments := range response {
+		if !requested[id] || environments == nil {
+			return nil, errors.New("state assignments: missing, unexpected, or invalid minion return")
+		}
+		for environment, states := range environments {
+			if environment == "" || strings.ContainsFunc(environment, unicode.IsControl) || states == nil {
+				return nil, errors.New("state assignments: invalid environment assignment")
+			}
+			for _, state := range states {
+				if state == "" || strings.ContainsFunc(state, unicode.IsControl) {
+					return nil, errors.New("state assignments: invalid state assignment")
+				}
+			}
+		}
+		result[id] = environments
+	}
+	return result, nil
 }
 
 type jobInfo struct {

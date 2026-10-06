@@ -427,7 +427,7 @@ func styledLines(lines []string, width int) []string {
 
 func helpLines(width int) []string {
 	return styledLines([]string{
-		"Navigation", "", "1 Fleet  2 Jobs  4 Events  6 Keys    switch workbench view",
+		"Navigation", "", "1 Fleet  2 Jobs  3 Assignments  4 Events  6 Keys    switch workbench view",
 		"t              build a target from accepted minions",
 		"s              open selected minion command console",
 		"g              graph selected Linux minion resources",
@@ -450,7 +450,7 @@ func Render(v ViewData) string {
 	if w == 0 || h == 0 {
 		return ""
 	}
-	hints := []hint{{"h", "highstate"}, {"s", "console"}, {"g", "graph"}, {"t", "targets"}, {"/", "search"}, {"enter", "inspect"}, {"tab", "panel"}, {"r", "refresh"}, {"?", "help"}, {"q", "quit"}}
+	hints := []hint{{"a", "assignments"}, {"h", "highstate"}, {"s", "console"}, {"g", "graph"}, {"t", "targets"}, {"/", "search"}, {"enter", "inspect"}, {"tab", "panel"}, {"r", "refresh"}, {"?", "help"}, {"q", "quit"}}
 	showUpdate := v.AvailableUpdate != "" && !v.Searching && !v.DetailSearching && !v.Help
 	if showUpdate {
 		hints = append(hints, hint{"U", "update"})

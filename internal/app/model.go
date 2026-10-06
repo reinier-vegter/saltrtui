@@ -6,6 +6,7 @@ import (
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"saltrtui/internal/assignments"
 	"saltrtui/internal/cache"
 	"saltrtui/internal/console"
 	"saltrtui/internal/events"
@@ -76,6 +77,9 @@ type Model struct {
 	metricBackend                                       metrics.Gateway
 	keyBackend                                          keys.Gateway
 	highstateBackend                                    highstate.Gateway
+	assignmentBackend                                   assignments.Gateway
+	assignments                                         *assignmentsState
+	assignmentsRequest                                  int
 	highstate                                           *highstateState
 	highstateRequest                                    int
 	key                                                 keyState
@@ -172,7 +176,8 @@ func NewWithUpdates(backend fleet.Gateway, jobBackend jobs.Gateway, consoleBacke
 	jobInput.Prompt = "/ "
 	jobInput.Placeholder = "filter jobs"
 	jobInput.SetWidth(24)
-	m := Model{backend: backend, jobBackend: jobBackend, consoleBackend: consoleBackend, eventBackend: eventBackend, metricBackend: metricBackend, keyBackend: keyBackend, highstateBackend: highstateBackend, key: newKeyState(), event: newEventState(), consoles: make(map[string]*consoleState), jobSearch: jobInput, jobDetails: make(map[string]jobDetail), context: configDir, altScreen: altScreen, search: input, detailSearch: grainInput, details: make(map[string]detail),
+	assignmentBackend, _ := backend.(assignments.Gateway)
+	m := Model{backend: backend, jobBackend: jobBackend, consoleBackend: consoleBackend, eventBackend: eventBackend, metricBackend: metricBackend, keyBackend: keyBackend, highstateBackend: highstateBackend, assignmentBackend: assignmentBackend, key: newKeyState(), event: newEventState(), consoles: make(map[string]*consoleState), jobSearch: jobInput, jobDetails: make(map[string]jobDetail), context: configDir, altScreen: altScreen, search: input, detailSearch: grainInput, details: make(map[string]detail),
 		keys: fleet.Observation[[]string]{Busy: true}, presence: fleet.Observation[[]string]{Busy: true},
 		version: version, updateStore: updateStore}
 	m.workCtx, m.workCancel = context.WithCancel(context.Background())
@@ -317,6 +322,8 @@ func (m Model) updateJobs(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch key {
 		case "1":
 			m.activeView = 0
+		case "3":
+			return m, m.openAssignments()
 		case "4":
 			return m, m.openEvents()
 		case "6":
@@ -474,6 +481,9 @@ func (m *Model) inspect() tea.Cmd {
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if updated, cmd, handled := m.assignmentsResult(msg); handled {
+		return updated, cmd
+	}
 	if updated, cmd, handled := m.updateResult(msg); handled {
 		return updated, cmd
 	}
@@ -534,6 +544,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.highstate.confirm = false
 				m.highstate.status = "Fleet selection changed; return to Fleet and review the new minion"
 			}
+			if m.assignments != nil && m.activeView == 9 && m.assignments.observation.At.IsZero() && !m.assignments.observation.Busy {
+				return m, m.loadAssignments()
+			}
 		}
 	case presenceLoaded:
 		if msg.context != m.context || msg.request != m.request {
@@ -591,7 +604,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.highstate != nil {
 			m.highstate.offset = min(m.highstate.offset, ui.HighstateScrollLimit(m.highstateViewData()))
 		}
+		if m.assignments != nil {
+			m.assignments.offset = min(m.assignments.offset, ui.AssignmentsScrollLimit(m.assignmentsViewData(), 0))
+			m.assignments.detailOffset = min(m.assignments.detailOffset, ui.AssignmentsScrollLimit(m.assignmentsViewData(), 1))
+			m.assignments.filter.SetWidth(max(1, min(32, ui.TargetWidth(m.width)-4)))
+		}
 	case tea.PasteMsg:
+		if m.activeView == 9 {
+			return m.updateAssignments(msg)
+		}
 		if m.activeView == 6 {
 			return m.updateKeys(msg)
 		}
@@ -621,6 +642,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case tea.KeyPressMsg:
 		key := msg.String()
+		if m.activeView == 9 {
+			return m.updateAssignments(msg)
+		}
 		if m.activeView == 8 {
 			return m.updateSelfUpdate(msg)
 		}
@@ -687,6 +711,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.loadJobs()
 			}
 			return m, nil
+		}
+		if key == "3" && !m.help {
+			return m, m.openAssignments()
 		}
 		if key == "4" && !m.help {
 			return m, m.openEvents()
@@ -823,7 +850,9 @@ func (m Model) viewData() ui.ViewData {
 
 func (m Model) View() tea.View {
 	var content string
-	if m.activeView == 8 {
+	if m.activeView == 9 {
+		content = ui.RenderAssignments(m.assignmentsViewData())
+	} else if m.activeView == 8 {
 		content = ui.RenderSelfUpdate(m.updateViewData())
 	} else if m.activeView == 7 {
 		content = ui.RenderHighstate(m.highstateViewData())

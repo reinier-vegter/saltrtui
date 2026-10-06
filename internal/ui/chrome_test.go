@@ -17,6 +17,7 @@ func TestSharedNavigationAndActionFrame(t *testing.T) {
 	}{
 		{"Fleet", "Fleet", func(w, h int) string { return Render(ViewData{Width: w, Height: h}) }},
 		{"Jobs", "Jobs", func(w, h int) string { return RenderJobs(JobsViewData{Width: w, Height: h}) }},
+		{"Assignments", "Assignments", func(w, h int) string { return RenderAssignments(AssignmentsViewData{Width: w, Height: h}) }},
 		{"Events", "Events", func(w, h int) string { return RenderEvents(EventsViewData{Width: w, Height: h}) }},
 		{"Keys", "Keys", func(w, h int) string { return RenderKeys(KeysViewData{Width: w, Height: h}) }},
 		{"Console", "Fleet", func(w, h int) string { return RenderConsole(ConsoleViewData{Width: w, Height: h}) }},
@@ -41,7 +42,14 @@ func TestSharedNavigationAndActionFrame(t *testing.T) {
 					if w >= 36 && h >= 2 {
 						header := ansi.Strip(lines[0])
 						last := -1
-						for _, mode := range []string{"1 Fleet", "2 Jobs", "4 Events", "6 Keys"} {
+						modes := []string{"1 Fleet", "2 Jobs", "3 Assignments", "4 Events", "6 Keys"}
+						if w < 70 {
+							modes = []string{"1 F", "2 J", "3 A", "4 E", "6 K"}
+							if w >= 36 {
+								modes[0] = "1 Fleet"
+							}
+						}
+						for _, mode := range modes {
 							pos := strings.Index(header, mode)
 							if pos <= last {
 								t.Fatalf("missing/unsorted modes in %q", header)

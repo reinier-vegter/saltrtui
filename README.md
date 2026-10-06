@@ -11,6 +11,7 @@
 ## Features
 
 - Browse accepted minions, observed presence, and minion-reported grains.
+- Explicitly inspect highstate top-file state assignments across the accepted fleet.
 - Inspect cached jobs and returns; follow live master events and one minion's resource readings.
 - Preview target IDs and run finite commands against a selected minion.
 - Review and explicitly confirm minion key changes or a selected minion's highstate.
@@ -84,6 +85,12 @@ saltrtui -config-dir /etc/salt
 ```
 
 Press `?` in the application for keyboard help. Use `-no-alt-screen` if you need inline terminal output.
+
+Press `3` to open **Assignments**. On its first visit it sends the read-only
+Salt `state.show_top` job to the current accepted-key fleet; later use `r` to
+refresh. The expandable tree groups responding minions by environment and
+assigned SLS file. It is a highstate selection view—not proof that a state was
+applied, a service is running, or an SLS represents a role.
 
 ## Build from source
 

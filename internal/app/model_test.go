@@ -9,6 +9,7 @@ import (
 
 	"charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+	"saltrtui/internal/assignments"
 	"saltrtui/internal/fleet"
 	"saltrtui/internal/ui"
 )
@@ -87,6 +88,10 @@ func (fakeGateway) ReadPresence(context.Context) ([]string, error) {
 }
 func (fakeGateway) ReadSelectedGrains(context.Context, string) (fleet.Grains, error) {
 	return fleet.Grains{"os": "Ubuntu"}, nil
+}
+
+func (fakeGateway) ReadStateTop(context.Context, []string) (assignments.Top, error) {
+	return assignments.Top{"web-01": {"base": {"baseline", "apps.web"}}}, nil
 }
 
 func update(m Model, msg any) Model {

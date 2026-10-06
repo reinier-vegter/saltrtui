@@ -39,8 +39,15 @@ func modeBar(width int, mode, context, subview string) string {
 	if width >= 60 {
 		parts = append(parts, accent.Render(" saltrtui ")+muted.Render("│"))
 	}
-	for _, entry := range []struct{ name, key string }{{"Fleet", "1"}, {"Jobs", "2"}, {"Events", "4"}, {"Keys", "6"}} {
-		text := entry.key + " " + entry.name
+	for _, entry := range []struct{ name, short, key string }{{"Fleet", "F", "1"}, {"Jobs", "J", "2"}, {"Assignments", "A", "3"}, {"Events", "E", "4"}, {"Keys", "K", "6"}} {
+		name := entry.name
+		if width < 70 {
+			name = entry.short
+			if width >= 36 && entry.name == "Fleet" {
+				name = entry.name
+			}
+		}
+		text := entry.key + " " + name
 		if entry.name == mode {
 			parts = append(parts, activeMode.Render(text))
 		} else {
