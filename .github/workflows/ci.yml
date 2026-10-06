@@ -43,6 +43,19 @@ jobs:
           grep -q 'GOOS=linux' dist/build-metadata.txt
           grep -q 'GOARCH=amd64' dist/build-metadata.txt
           grep -q 'CGO_ENABLED=0' dist/build-metadata.txt
+          grep -q 'GOAMD64=v1' dist/build-metadata.txt
+      - name: Smoke-test Linux artifacts in supported environments
+        run: |
+          docker run --privileged --rm tonistiigi/binfmt --install arm64
+          for arch in amd64 arm64; do
+            binary="$PWD/dist/targets/dev/saltrtui_dev_linux_$arch"
+            for image in ubuntu:24.04 debian:bookworm-slim; do
+              result=$(docker run --rm --network none --platform "linux/$arch" \
+                --mount "type=bind,src=$binary,dst=/saltrtui,readonly" \
+                "$image" /saltrtui --version)
+              test "$result" = 'saltrtui dev'
+            done
+          done
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: saltrtui-linux-amd64-dev

@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 )
 
 const releaseDownloadURL = "https://github.com/reinier-vegter/saltrtui/releases/download"
@@ -22,9 +23,12 @@ const maxBinarySize = 128 << 20
 
 // Installation describes the running standalone binary and the local alternative.
 type Installation struct {
-	Current  string
-	Local    string
-	Writable bool
+	Current        string
+	Writable       bool
+	Eligible       bool
+	SudoAllowed    bool
+	OriginalDigest string
+	Reason         string
 }
 
 // InspectInstallation resolves symlinks and checks directory replacement access.
@@ -33,11 +37,7 @@ func InspectInstallation() (Installation, error) {
 	if err != nil {
 		return Installation{}, err
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return Installation{}, err
-	}
-	return inspectInstallation(current, home)
+	return inspectInstallation(current, "")
 }
 
 func inspectInstallation(current, home string) (Installation, error) {
@@ -45,7 +45,28 @@ func inspectInstallation(current, home string) (Installation, error) {
 	if err != nil {
 		return Installation{}, err
 	}
-	installation := Installation{Current: current, Local: filepath.Join(home, ".local", "bin", "saltrtui")}
+	installation := Installation{Current: current}
+	info, err := os.Lstat(current)
+	if err != nil {
+		return Installation{}, err
+	}
+	if !info.Mode().IsRegular() || filepath.Base(current) != "saltrtui" {
+		installation.Reason = "the running executable is not a standalone saltrtui file"
+		return installation, nil
+	}
+	parent := filepath.Dir(current)
+	resolvedParent, err := filepath.EvalSymlinks(parent)
+	parentInfo, parentErr := os.Stat(parent)
+	if err != nil || parentErr != nil || resolvedParent != parent || parentInfo.Mode().Perm()&0o022 != 0 {
+		installation.Reason = "the installation path is not safe for in-place replacement"
+		return installation, nil
+	}
+	digest, err := fileDigest(current)
+	if err != nil {
+		return Installation{}, fmt.Errorf("digest running executable: %w", err)
+	}
+	installation.OriginalDigest = digest
+	installation.Eligible = true
 	probe, err := os.CreateTemp(filepath.Dir(current), ".saltrtui-write-check-*")
 	if err == nil {
 		probe.Close()
@@ -54,7 +75,23 @@ func inspectInstallation(current, home string) (Installation, error) {
 	} else if !os.IsPermission(err) {
 		return Installation{}, fmt.Errorf("check installation directory: %w", err)
 	}
+	if stat, ok := info.Sys().(*syscall.Stat_t); ok && stat.Uid == 0 && info.Mode().Perm()&0o022 == 0 {
+		installation.SudoAllowed = true
+	}
 	return installation, nil
+}
+
+func fileDigest(path string) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+	hash := sha256.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
 // Artifact keeps fetched data opaque until its integrity has been verified.
@@ -167,11 +204,14 @@ func readBounded(reader io.Reader, limit int64) ([]byte, error) {
 
 // Install atomically replaces a regular standalone executable with verified bytes.
 func Install(destination string, binary []byte) error {
+	return InstallChecked(destination, "", binary)
+}
+
+// InstallChecked preserves the reviewed executable until the verified payload
+// is ready for an atomic replacement.
+func InstallChecked(destination, expectedDigest string, binary []byte) error {
 	if !filepath.IsAbs(destination) || len(binary) == 0 {
 		return fmt.Errorf("installation requires an absolute path and non-empty binary")
-	}
-	if err := os.MkdirAll(filepath.Dir(destination), 0755); err != nil {
-		return err
 	}
 	if err := checkDestination(destination); err != nil {
 		return err
@@ -197,13 +237,65 @@ func Install(destination string, binary []byte) error {
 	if err = checkDestination(destination); err != nil {
 		return err
 	}
-	return os.Rename(file.Name(), destination)
+	if expectedDigest != "" {
+		actual, err := fileDigest(destination)
+		if err != nil || actual != expectedDigest {
+			return fmt.Errorf("running executable changed since update review")
+		}
+	}
+	if err := os.Rename(file.Name(), destination); err != nil {
+		return err
+	}
+	parent, err := os.Open(filepath.Dir(destination))
+	if err != nil {
+		return fmt.Errorf("replacement committed but parent sync unavailable: %w", err)
+	}
+	defer parent.Close()
+	if err := parent.Sync(); err != nil {
+		return fmt.Errorf("replacement committed but parent sync unavailable: %w", err)
+	}
+	return nil
+}
+
+// ReplacementCommitted reports whether an error occurred after the atomic
+// rename commit point. Callers must not claim the previous executable survived.
+func ReplacementCommitted(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "replacement committed")
+}
+
+// InstallFromReader is the only elevated helper operation. It verifies the
+// reviewed byte count and digest before reusing the normal atomic installer.
+func InstallFromReader(destination, originalDigest, payloadDigest string, length int64, reader io.Reader) error {
+	if length <= 0 || length > maxBinarySize {
+		return fmt.Errorf("invalid installer payload length")
+	}
+	binary, err := readBounded(io.LimitReader(reader, length+1), length)
+	if err != nil {
+		return err
+	}
+	if int64(len(binary)) != length {
+		return fmt.Errorf("installer payload length mismatch")
+	}
+	hash := sha256.Sum256(binary)
+	if hex.EncodeToString(hash[:]) != payloadDigest {
+		return fmt.Errorf("installer payload digest mismatch")
+	}
+	return InstallChecked(destination, originalDigest, binary)
 }
 
 func checkDestination(destination string) error {
+	parent := filepath.Dir(destination)
+	resolvedParent, err := filepath.EvalSymlinks(parent)
+	if err != nil || resolvedParent != parent {
+		return fmt.Errorf("refusing symlinked or unavailable installation directory %s", parent)
+	}
+	parentInfo, err := os.Stat(parent)
+	if err != nil || !parentInfo.IsDir() || parentInfo.Mode().Perm()&0o022 != 0 {
+		return fmt.Errorf("refusing unsafe installation directory %s", parent)
+	}
 	info, err := os.Lstat(destination)
 	if os.IsNotExist(err) {
-		return nil
+		return fmt.Errorf("refusing to create a new update destination %s", destination)
 	}
 	if err != nil {
 		return err
@@ -214,41 +306,14 @@ func checkDestination(destination string) error {
 	return nil
 }
 
-// The script is constant; destination is an argument, never interpolated code.
-// Root reads verified bytes from a pipe, not a mutable user-owned source file.
-const sudoInstallScript = `set -eu
-target=$1
-case "$target" in /*) ;; *) exit 1 ;; esac
-[ ! -L "$target" ] && { [ ! -e "$target" ] || [ -f "$target" ]; }
-tmp=$(/usr/bin/mktemp "${target}.update.XXXXXX")
-trap '/bin/rm -f "$tmp"' EXIT
-trap 'exit 1' HUP INT TERM
-/bin/cat > "$tmp"
-[ -s "$tmp" ]
-/bin/chmod 0755 "$tmp"
-[ ! -L "$target" ] && { [ ! -e "$target" ] || [ -f "$target" ]; }
-/bin/mv -f "$tmp" "$target"
-`
-
-// SudoCommand elevates only atomic installation. sudo prompts through /dev/tty.
-func SudoCommand(destination string, binary []byte) (*exec.Cmd, error) {
-	if !filepath.IsAbs(destination) || len(binary) == 0 {
+// SudoCommand invokes the inspected root-owned executable as a narrowly scoped
+// helper. Root receives payload bytes only through stdin.
+func SudoCommand(helper, destination, expectedDigest string, binary []byte) (*exec.Cmd, error) {
+	if !filepath.IsAbs(helper) || !filepath.IsAbs(destination) || expectedDigest == "" || len(binary) == 0 {
 		return nil, fmt.Errorf("installation requires an absolute path and non-empty binary")
 	}
-	command := exec.Command("sudo", "--", "/bin/sh", "-c", sudoInstallScript, "saltrtui-install", destination)
+	payloadHash := sha256.Sum256(binary)
+	command := exec.Command("/usr/bin/sudo", "--", helper, "--install-stdin", destination, expectedDigest, hex.EncodeToString(payloadHash[:]), fmt.Sprintf("%d", len(binary)))
 	command.Stdin = bytes.NewReader(binary)
 	return command, nil
-}
-
-// LocalPathGuidance checks this process's PATH without editing shell profiles.
-func LocalPathGuidance(destination string) string {
-	resolved, err := exec.LookPath("saltrtui")
-	if err == nil {
-		resolved, err = filepath.EvalSymlinks(resolved)
-	}
-	local, localErr := filepath.EvalSymlinks(destination)
-	if err == nil && localErr == nil && resolved == local {
-		return "PATH resolves saltrtui to the user-local installation. Restart saltrtui; reset your shell command cache if needed (hash -r in Bash)."
-	}
-	return "PATH does not resolve saltrtui to the user-local installation. Put $HOME/.local/bin first on PATH (export PATH=\"$HOME/.local/bin:$PATH\"), persist it in your shell profile, and reset your shell command cache (hash -r in Bash). You can also run the installed path directly."
 }

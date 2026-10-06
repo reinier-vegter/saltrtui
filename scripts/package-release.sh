@@ -21,25 +21,36 @@ mkdir -p "$root/dist/release"
 stage=$(mktemp -d "$root/dist/release/.package.XXXXXX")
 trap 'rm -r "$stage"' EXIT
 
-"$root/scripts/build-linux-amd64.sh" "$version"
-binary="$root/dist/saltrtui-linux-amd64"
-test "$("$binary" --version)" = "saltrtui $version"
-go version -m "$binary" > "$stage/build-metadata"
-grep -q 'GOOS=linux' "$stage/build-metadata"
-grep -q 'GOARCH=amd64' "$stage/build-metadata"
-grep -q 'CGO_ENABLED=0' "$stage/build-metadata"
-
-archive="saltrtui_${version}_linux_amd64.gz"
-gzip -n -c "$binary" > "$stage/$archive"
-gzip -t "$stage/$archive"
+"$root/scripts/build-targets.sh" "$version"
+for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
+    os=${target%/*}
+    arch=${target#*/}
+    binary="$root/dist/targets/$version/saltrtui_${version}_${os}_${arch}"
+    archive="saltrtui_${version}_${os}_${arch}.gz"
+    test -s "$binary"
+    go version -m "$binary" > "$stage/build-metadata"
+    grep -q "GOOS=$os" "$stage/build-metadata"
+    grep -q "GOARCH=$arch" "$stage/build-metadata"
+    grep -q 'CGO_ENABLED=0' "$stage/build-metadata"
+    if [ "$arch" = amd64 ]; then grep -q 'GOAMD64=v1' "$stage/build-metadata"; fi
+    if [ "$arch" = arm64 ]; then grep -q 'GOARM64=v8.0' "$stage/build-metadata"; fi
+    if [ "$os" = linux ]; then
+        test "$("$binary" --version)" = "saltrtui $version"
+        ! readelf -l "$binary" | grep -q 'Requesting program interpreter'
+        ! readelf -d "$binary" | grep -q 'NEEDED'
+    fi
+    gzip -9 -n -c "$binary" > "$stage/$archive"
+    gzip -t "$stage/$archive"
+    rm "$stage/build-metadata"
+done
 cd "$stage"
-sha256sum "$archive" > SHA256SUMS
+sha256sum saltrtui_*.gz > SHA256SUMS
 sha256sum -c SHA256SUMS
-gzip -dc "$archive" > extracted
-test -s extracted
-chmod 755 extracted
-test "$(./extracted --version)" = "saltrtui $version"
-rm extracted build-metadata
+for archive in saltrtui_*.gz; do
+    gzip -dc "$archive" > extracted
+    test -s extracted
+    rm extracted
+done
 cd "$root"
 # Linux mv -T refuses to merge into an existing directory. Publish as one set.
 mv -T "$stage" "$destination"

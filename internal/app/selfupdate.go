@@ -103,7 +103,13 @@ func (m Model) handleInstallationInspected(msg installationInspectedMsg) (tea.Mo
 	if msg.generation != m.updateGeneration || m.updatePhase != "inspecting" {
 		return m, nil
 	}
-	if msg.err != nil {
+	if msg.err != nil || !msg.installation.Eligible || (!msg.installation.Writable && !msg.installation.SudoAllowed) {
+		if msg.err == nil && !msg.installation.SudoAllowed {
+			msg.err = fmt.Errorf("the protected executable is not a trusted root-owned standalone installation")
+		}
+		if msg.err == nil {
+			msg.err = fmt.Errorf("%s", msg.installation.Reason)
+		}
 		m.updatePhase, m.updateText = "failed", "Cannot inspect installation: "+msg.err.Error()
 		return m, nil
 	}
@@ -124,14 +130,14 @@ func (m Model) updateSelfUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	key := keyMsg.String()
-	if key == "esc" || key == "q" {
+	if key == "esc" || key == "q" || key == "ctrl+c" {
 		if m.updateCancel != nil {
 			m.updateCancel()
 			m.updateCancel = nil
 		}
 		m.updateGeneration++
 		m.activeView = 0
-		if key == "q" {
+		if key == "q" || key == "ctrl+c" {
 			m.stopEvents()
 			return m, tea.Quit
 		}
@@ -141,9 +147,6 @@ func (m Model) updateSelfUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	last := 1
-	if !m.installation.Writable {
-		last = 2
-	}
 	switch key {
 	case "up", "k":
 		if m.updateIndex > 0 {
@@ -154,15 +157,16 @@ func (m Model) updateSelfUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateIndex++
 		}
 	case "enter":
+		if m.width < 60 || m.height < 12 {
+			m.updateText = "Resize the terminal to review the full destination and cancellation controls before confirming."
+			return m, nil
+		}
 		if m.updateIndex == last {
 			m.activeView = 0
 			return m, nil
 		}
 		m.updateDestination = m.installation.Current
-		m.updateSudo = !m.installation.Writable && m.updateIndex == 1
-		if !m.installation.Writable && !m.updateSudo {
-			m.updateDestination = m.installation.Local
-		}
+		m.updateSudo = !m.installation.Writable
 		m.updatePhase, m.updateText = "downloading", "Downloading release assets…"
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		m.updateCancel = cancel
@@ -205,7 +209,7 @@ func (m Model) handleUpdateDownloaded(msg updateDownloadedMsg) (tea.Model, tea.C
 	m.updatePhase, m.updateText = "installing", "Installing verified release at "+m.updateDestination+"…"
 	generation, destination := m.updateGeneration, m.updateDestination
 	if m.updateSudo {
-		command, err := release.SudoCommand(destination, msg.binary)
+		command, err := release.SudoCommand(m.installation.Current, destination, m.installation.OriginalDigest, msg.binary)
 		if err != nil {
 			return m.handleUpdateInstalled(updateInstalledMsg{generation: generation, err: err})
 		}
@@ -214,7 +218,7 @@ func (m Model) handleUpdateDownloaded(msg updateDownloadedMsg) (tea.Model, tea.C
 		})
 	}
 	return m, func() tea.Msg {
-		return updateInstalledMsg{generation: generation, err: release.Install(destination, msg.binary)}
+		return updateInstalledMsg{generation: generation, err: release.InstallChecked(destination, m.installation.OriginalDigest, msg.binary)}
 	}
 }
 
@@ -223,15 +227,18 @@ func (m Model) handleUpdateInstalled(msg updateInstalledMsg) (tea.Model, tea.Cmd
 		return m, nil
 	}
 	if msg.err != nil {
+		if release.ReplacementCommitted(msg.err) {
+			m.updatePhase = "done"
+			m.updateText = fmt.Sprintf("Installed %s at %s, but durability confirmation failed: %v\nRestart saltrtui to use the new version; this process is still %s.", m.availableUpdate, m.updateDestination, msg.err, m.version)
+			m.updateInstalled = true
+			m.availableUpdate = ""
+			return m, nil
+		}
 		m.updatePhase, m.updateText = "failed", "Installation failed or sudo cancelled: "+msg.err.Error()+"\nCheck destination permissions or retry the chosen installation method."
 		return m, nil
 	}
 	m.updatePhase = "done"
 	m.updateText = fmt.Sprintf("Installed %s at %s.\nRestart saltrtui to use the new version; this process is still %s.", m.availableUpdate, m.updateDestination, m.version)
-	if m.updateDestination == m.installation.Local && m.updateDestination != m.installation.Current {
-		m.updateText += "\n\n" + release.LocalPathGuidance(m.updateDestination)
-		m.updateText += "\n\nThe old system copy remains at " + m.installation.Current + ".\nAfter verifying the local installation, you may remove the old standalone copy manually using sudo."
-	}
 	m.updateInstalled = true
 	m.availableUpdate = ""
 	return m, nil
@@ -242,6 +249,6 @@ func (m Model) updateViewData() ui.UpdateViewData {
 		Width: m.width, Height: m.height, Context: m.context,
 		Running: m.version, Available: m.availableUpdate, Index: m.updateIndex,
 		Phase: m.updatePhase, Text: m.updateText,
-		Current: m.installation.Current, Local: m.installation.Local, Writable: m.installation.Writable,
+		Current: m.installation.Current, Writable: m.installation.Writable,
 	}
 }

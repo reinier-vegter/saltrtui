@@ -20,7 +20,7 @@ defaults:
 
 jobs:
   verify-and-package:
-    # Linux amd64 is the only supported release target.
+    # Build all supported targets; Linux artifacts also receive runtime smoke tests.
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     outputs:
@@ -51,28 +51,31 @@ jobs:
           mkdir -p dist
           go test -coverprofile=dist/coverage.out ./...
           scripts/verify.sh
-      - name: Package verified Linux amd64 release
+      - name: Package verified release targets
         env:
           RELEASE_TAG: ${{ steps.version.outputs.tag }}
         run: scripts/package-release.sh "$RELEASE_TAG"
-      - name: Smoke-test extracted executable in Linux environments
+      - name: Smoke-test extracted Linux executables in Linux environments
         env:
           RELEASE_TAG: ${{ steps.version.outputs.tag }}
         run: |
-          gzip -dc "dist/release/$RELEASE_TAG/saltrtui_${RELEASE_TAG}_linux_amd64.gz" > dist/smoke-saltrtui
-          chmod 755 dist/smoke-saltrtui
-          test "$(dist/smoke-saltrtui --version)" = "saltrtui $RELEASE_TAG"
-          for image in ubuntu:24.04 debian:bookworm-slim; do
-            result=$(docker run --rm --network none --platform linux/amd64 \
-              --mount "type=bind,src=$PWD/dist/smoke-saltrtui,dst=/saltrtui,readonly" \
-              "$image" /saltrtui --version)
-            test "$result" = "saltrtui $RELEASE_TAG"
+          docker run --privileged --rm tonistiigi/binfmt --install arm64
+          for arch in amd64 arm64; do
+            gzip -dc "dist/release/$RELEASE_TAG/saltrtui_${RELEASE_TAG}_linux_${arch}.gz" > "dist/smoke-saltrtui-$arch"
+            chmod 755 "dist/smoke-saltrtui-$arch"
+            test "$("dist/smoke-saltrtui-$arch" --version)" = "saltrtui $RELEASE_TAG"
+            for image in ubuntu:24.04 debian:bookworm-slim; do
+              result=$(docker run --rm --network none --platform "linux/$arch" \
+                --mount "type=bind,src=$PWD/dist/smoke-saltrtui-$arch,dst=/saltrtui,readonly" \
+                "$image" /saltrtui --version)
+              test "$result" = "saltrtui $RELEASE_TAG"
+            done
           done
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-assets
           path: |
-            dist/release/${{ steps.version.outputs.tag }}/saltrtui_${{ steps.version.outputs.tag }}_linux_amd64.gz
+            dist/release/${{ steps.version.outputs.tag }}/saltrtui_${{ steps.version.outputs.tag }}_*.gz
             dist/release/${{ steps.version.outputs.tag }}/SHA256SUMS
           if-no-files-found: error
           retention-days: 14
@@ -103,12 +106,10 @@ jobs:
           git fetch --no-tags origin "refs/tags/$RELEASE_TAG"
           test "$(git rev-parse 'FETCH_HEAD^{commit}')" = "$RELEASE_COMMIT"
           cd release-assets
-          archive="saltrtui_${RELEASE_TAG}_linux_amd64.gz"
-          test "$(find . -mindepth 1 -maxdepth 1 -type f | wc -l)" -eq 2
-          test "$(wc -l < SHA256SUMS)" -eq 1
-          test "$(cat SHA256SUMS)" = "$(sha256sum "$archive")"
+          test "$(find . -mindepth 1 -maxdepth 1 -type f | wc -l)" -eq 5
+          test "$(wc -l < SHA256SUMS)" -eq 4
           sha256sum -c SHA256SUMS
-          gzip -t "$archive"
+          for archive in saltrtui_*.gz; do gzip -t "$archive"; done
           releases=$(gh api --paginate --slurp "repos/$GH_REPO/releases")
           existing=$(printf '%s' "$releases" | jq -r --arg tag "$RELEASE_TAG" \
             '.[][] | select(.tag_name == $tag) | .tag_name')
@@ -120,11 +121,11 @@ jobs:
         working-directory: release-assets
         run: |
           gh release create "$RELEASE_TAG" \
-            "saltrtui_${RELEASE_TAG}_linux_amd64.gz" SHA256SUMS \
+            saltrtui_*.gz SHA256SUMS \
             --verify-tag --draft --generate-notes --title "saltrtui $RELEASE_TAG" \
             --target "$RELEASE_COMMIT"
           gh release edit "$RELEASE_TAG" --draft=false --prerelease=false
-      - name: Print copyable Ubuntu and Debian install commands
+      - name: Print copyable Linux amd64 install command
         env:
           RELEASE_TAG: ${{ needs.verify-and-package.outputs.tag }}
         run: |
@@ -132,6 +133,6 @@ jobs:
           printf '%s\n' "$commands"
           {
             printf '## Install saltrtui %s\n\n' "$RELEASE_TAG"
-            printf 'Copy the command for your distribution. Requires curl, gzip, and GNU coreutils.\n\n'
+            printf 'Requires curl, gzip, GNU coreutils, and sudo.\n\n'
             printf '~~~sh\n%s\n~~~\n' "$commands"
           } >> "$GITHUB_STEP_SUMMARY"

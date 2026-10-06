@@ -25,7 +25,7 @@ func TestUpdateNoticeOpensReviewOnlyWhenAvailable(t *testing.T) {
 func TestInstallationInspectedMovesToConfirmOrFailed(t *testing.T) {
 	m := New(fakeGateway{}, "master-a", true)
 	m.availableUpdate, m.activeView, m.updatePhase, m.updateGeneration = "v1.2.4", 8, "inspecting", 1
-	updated := update(m, installationInspectedMsg{generation: 1, installation: release.Installation{Current: "/opt/saltrtui", Writable: false, Local: "/home/op/.local/bin/saltrtui"}})
+	updated := update(m, installationInspectedMsg{generation: 1, installation: release.Installation{Current: "/opt/saltrtui", Writable: false, Eligible: true, SudoAllowed: true}})
 	if updated.updatePhase != "confirm" || updated.installation.Current != "/opt/saltrtui" {
 		t.Fatalf("expected confirm phase with installation recorded: %#v", updated)
 	}
@@ -50,13 +50,13 @@ func TestConfirmChoicesAndEscCancelWithoutInstalling(t *testing.T) {
 		sudo        bool
 	}{
 		{writable: true, index: 0, destination: "/opt/saltrtui", sudo: false},
-		{writable: false, index: 0, destination: "/home/op/.local/bin/saltrtui", sudo: false},
-		{writable: false, index: 1, destination: "/opt/saltrtui", sudo: true},
+		{writable: false, index: 0, destination: "/opt/saltrtui", sudo: true},
 	}
 	for _, tc := range cases {
 		m := New(fakeGateway{}, "master-a", true)
+		m.width, m.height = 100, 30
 		m.availableUpdate, m.activeView, m.updatePhase, m.updateIndex = "v1.2.4", 8, "confirm", tc.index
-		m.installation = release.Installation{Current: "/opt/saltrtui", Local: "/home/op/.local/bin/saltrtui", Writable: tc.writable}
+		m.installation = release.Installation{Current: "/opt/saltrtui", Writable: tc.writable}
 		updated := update(m, tea.KeyPressMsg{Code: tea.KeyEnter})
 		if updated.updatePhase != "downloading" || updated.updateDestination != tc.destination || updated.updateSudo != tc.sudo {
 			t.Fatalf("case %#v: phase=%s dest=%s sudo=%v", tc, updated.updatePhase, updated.updateDestination, updated.updateSudo)
@@ -67,6 +67,7 @@ func TestConfirmChoicesAndEscCancelWithoutInstalling(t *testing.T) {
 	}
 
 	m := New(fakeGateway{}, "master-a", true)
+	m.width, m.height = 100, 30
 	m.availableUpdate, m.activeView, m.updatePhase, m.updateIndex = "v1.2.4", 8, "confirm", 1
 	m.installation = release.Installation{Writable: true}
 	updated := update(m, tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -123,8 +124,8 @@ func TestInstallationCompletionClearsNoticeAndKeepsRunningVersion(t *testing.T) 
 	m := New(fakeGateway{}, "master-a", true)
 	m.version = "v1.2.3"
 	m.availableUpdate, m.activeView, m.updatePhase = "v1.2.4", 8, "installing"
-	m.updateDestination = "/home/op/.local/bin/saltrtui"
-	m.installation = release.Installation{Current: "/opt/saltrtui", Local: "/home/op/.local/bin/saltrtui"}
+	m.updateDestination = "/opt/saltrtui"
+	m.installation = release.Installation{Current: "/opt/saltrtui"}
 	updated := update(m, updateInstalledMsg{})
 	if !updated.updateInstalled || updated.availableUpdate != "" {
 		t.Fatal("completion did not clear the notice")

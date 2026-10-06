@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -118,6 +119,26 @@ func TestInstallRejectsRelativeOrEmptyInput(t *testing.T) {
 	}
 }
 
+func TestInstallFromReaderBindsPayloadAndReviewedOriginal(t *testing.T) {
+	dir := t.TempDir()
+	destination := filepath.Join(dir, "saltrtui")
+	if err := os.WriteFile(destination, []byte("old"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	original, err := fileDigest(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := []byte("new")
+	payloadHash := sha256.Sum256(payload)
+	if err := InstallFromReader(destination, original, hex.EncodeToString(payloadHash[:]), int64(len(payload)), bytes.NewReader(payload)); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(destination); string(got) != "new" {
+		t.Fatalf("installed %q", got)
+	}
+}
+
 func TestInspectInstallationWritability(t *testing.T) {
 	dir := t.TempDir()
 	current := filepath.Join(dir, "saltrtui")
@@ -126,17 +147,17 @@ func TestInspectInstallationWritability(t *testing.T) {
 	}
 	home := t.TempDir()
 	installation, err := inspectInstallation(current, home)
-	if err != nil || !installation.Writable || installation.Local != filepath.Join(home, ".local", "bin", "saltrtui") {
+	if err != nil || !installation.Writable || !installation.Eligible || installation.OriginalDigest == "" {
 		t.Fatalf("installation = %#v, %v", installation, err)
 	}
 }
 
 func TestSudoCommandNeverInvokedInTests(t *testing.T) {
-	command, err := SudoCommand("/usr/local/bin/saltrtui", []byte("verified"))
+	command, err := SudoCommand("/usr/local/bin/saltrtui", "/usr/local/bin/saltrtui", strings.Repeat("a", 64), []byte("verified"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if command.Path == "" || command.Args[0] != "sudo" {
+	if command.Path != "/usr/bin/sudo" || command.Args[3] != "--install-stdin" {
 		t.Fatalf("unexpected command: %#v", command)
 	}
 	// This test never runs command.Run(); it only checks construction.

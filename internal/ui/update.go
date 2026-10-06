@@ -8,21 +8,23 @@ type UpdateViewData struct {
 	Width, Height, Index        int
 	Context, Running, Available string
 	Phase, Text                 string
-	Current, Local              string
+	Current                     string
 	Writable                    bool
 }
 
 func updateConfirmLines(v UpdateViewData, width int) []string {
+	if v.Width < 60 || v.Height < 12 {
+		return []string{"Resize the terminal to review the update destination before confirming.", "", "Esc: back"}
+	}
 	transition := v.Running + " -> " + v.Available
 	lines := []string{transition, "", "Current location", v.Current, ""}
 	var options, details []string
+	options = []string{"Update in place", "Cancel"}
 	if v.Writable {
-		options = []string{"Update in place", "Cancel"}
 		details = []string{v.Current + " · no sudo", ""}
 	} else {
 		lines = append(lines, "This location requires administrator privileges.", "")
-		options = []string{"Install for my user (recommended)", "Update system installation", "Cancel"}
-		details = []string{v.Local + " · no sudo", v.Current + " · sudo required", ""}
+		details = []string{v.Current + " · sudo required", ""}
 	}
 	for index, option := range options {
 		cursor := "  "

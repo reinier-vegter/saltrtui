@@ -360,6 +360,10 @@ func (m Model) Init() tea.Cmd {
 
 // Close releases the long-lived listener even when Run stops without a keypress.
 func (m *Model) Close() {
+	if m.updateCancel != nil {
+		m.updateCancel()
+		m.updateCancel = nil
+	}
 	if m.workCancel != nil {
 		m.workCancel()
 	}
@@ -617,6 +621,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case tea.KeyPressMsg:
 		key := msg.String()
+		if m.activeView == 8 {
+			return m.updateSelfUpdate(msg)
+		}
 		if key == "ctrl+c" {
 			m.stopEvents()
 			m.stopGraph()
@@ -624,9 +631,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.activeView == 7 {
 			return m.updateHighstate(msg)
-		}
-		if m.activeView == 8 {
-			return m.updateSelfUpdate(msg)
 		}
 		if m.activeView == 6 {
 			return m.updateKeys(msg)

@@ -15,7 +15,7 @@ tmp_dir=$(mktemp -d "$root/dist/.saltrtui-linux-amd64.XXXXXX")
 trap 'rm -r "$tmp_dir"' EXIT
 
 cd "$root"
-GOWORK=off CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+GOWORK=off CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOAMD64=v1 GOARM64=v8.0 \
   go build -trimpath -buildvcs=false -ldflags="-X main.version=$version" \
     -o "$tmp_dir/saltrtui-linux-amd64" ./cmd/saltrtui
 mv -f "$tmp_dir/saltrtui-linux-amd64" "$root/dist/saltrtui-linux-amd64"

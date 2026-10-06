@@ -102,13 +102,21 @@ func isNewer(candidate, current string) bool {
 
 func parseVersion(version string) ([3]int, bool) {
 	var result [3]int
-	parts := strings.Split(strings.TrimPrefix(version, "v"), ".")
+	if len(version) < 2 || version[0] != 'v' {
+		return result, false
+	}
+	parts := strings.Split(version[1:], ".")
 	if len(parts) != len(result) {
 		return result, false
 	}
 	for index, part := range parts {
-		if part == "" {
+		if part == "" || (len(part) > 1 && part[0] == '0') {
 			return result, false
+		}
+		for _, character := range part {
+			if character < '0' || character > '9' {
+				return result, false
+			}
 		}
 		value, err := strconv.Atoi(part)
 		if err != nil || value < 0 {

@@ -1,6 +1,10 @@
 # saltrtui
 
-[![CI](https://github.com/reinier-vegter/saltrtui/actions/workflows/ci.yml/badge.svg)](https://github.com/reinier-vegter/saltrtui/actions/workflows/ci.yml)
+[![CI](https://github.com/reinier-vegter/saltrtui/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/reinier-vegter/saltrtui/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/reinier-vegter/saltrtui?style=flat)](https://github.com/reinier-vegter/saltrtui/releases/latest)
+[![Go version](https://img.shields.io/github/go-mod/go-version/reinier-vegter/saltrtui?style=flat)](go.mod)
+[![Platforms](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20(amd64%2C%20arm64)-1f6feb?style=flat)](https://github.com/reinier-vegter/saltrtui/releases/latest)
+[![License](https://img.shields.io/github/license/reinier-vegter/saltrtui?style=flat)](LICENSE)
 
 `saltrtui` is a keyboard-first Salt fleet workbench for operators on a Salt master.
 
@@ -13,33 +17,46 @@
 
 ## Requirements
 
-- Linux amd64 is the only supported binary/release target.
+- Linux and macOS on amd64 or arm64 are supported **release targets**. The currently published `v0.0.2` predates this matrix and provides Linux amd64 only; the next stable release will publish all four assets. Linux artifacts are smoke-tested on Ubuntu 24.04 and Debian bookworm for both architectures. Cross-built macOS binaries require native validation on a Mac.
 - Run on a Salt master host with `salt-key`, `salt-run`, and `salt` available to the current account.
-- Use an operator account permitted to access the selected Salt master configuration, keys, logs, and job cache. The TUI does not elevate privileges.
+- Use an operator account permitted to access the selected Salt master configuration, keys, logs, and job cache. Normal application use does not require elevation.
 
-## Versioning
+## Installation
 
-Stable releases use `vMAJOR.MINOR.PATCH` tags. Run `saltrtui --version` to check your installed version; source/development builds report `dev`.
+The current stable release is [v0.0.2](https://github.com/reinier-vegter/saltrtui/releases/tag/v0.0.2). Its available Linux amd64 archive can be installed as follows. Future releases will provide the complete four-platform matrix below; do not use an unlisted filename before it is published.
 
-## Install and update
+### Linux
 
-Release automation is configured; the first tagged release has not yet been published. When available, open the [latest GitHub Release](https://github.com/reinier-vegter/saltrtui/releases/latest), then copy the Ubuntu 24.04 or Debian bookworm install command from the successful [release workflow run summary](https://github.com/reinier-vegter/saltrtui/actions/workflows/release.yml). Both use the Linux amd64 binary and install it to `~/.local/bin/saltrtui`. The command requires `curl`, `gzip`, and GNU coreutils. Until the first release, use the source build below.
-
-Add `~/.local/bin` to your shell's `PATH` if necessary:
+**Intel/AMD 64-bit:** [saltrtui_v0.0.2_linux_amd64.gz](https://github.com/reinier-vegter/saltrtui/releases/download/v0.0.2/saltrtui_v0.0.2_linux_amd64.gz)
 
 ```sh
-export PATH="$HOME/.local/bin:$PATH"
+gunzip saltrtui_v0.0.2_linux_amd64.gz
+test -s saltrtui_v0.0.2_linux_amd64
+sudo mkdir -p /usr/local/bin
+test ! -L /usr/local/bin/saltrtui
+sudo install -m 0755 saltrtui_v0.0.2_linux_amd64 /usr/local/bin/saltrtui
 ```
 
-Persist that setting in your own shell configuration if desired. Restart the app after installation or replacement; an already running process keeps its old version.
+Linux arm64 will be available in the next stable release.
 
-### Update from the TUI
+### macOS
 
-A stable release install checks GitHub for a newer stable release in the background (at most once per hour) and shows `vX.Y.Z available · U: update` in the Fleet header when one exists. Press `U` to review it: the running and available versions, current location, and destination are shown before anything downloads. `Enter` on the recommended choice downloads, verifies, and installs the update; `Esc` or Cancel always leave without changing anything. A writable `~/.local/bin/saltrtui` install updates in place; a protected install offers a user-local install (recommended) or an explicit sudo update. Restart saltrtui afterward; the running process keeps reporting its old version until then. Development (`dev`) builds never check or offer an update.
+macOS archives will be available in the next stable release.
 
-You can still update manually at any time by copying a newer release's install command from its workflow summary. CI artifacts are development builds, not stable releases.
+Confirm command resolution and the installed release:
 
-## Run
+```sh
+command -v saltrtui
+saltrtui --version
+```
+
+The command should resolve to `/usr/local/bin/saltrtui` and report `saltrtui v0.0.2`. If it does not, put `/usr/local/bin` on `PATH`, clear the shell command cache (for example, `hash -r` in Bash), and check again. Do not overwrite a package-managed executable; use its distribution channel or install the standalone release in a safe location instead.
+
+### Update
+
+Stable release installs check GitHub for a newer stable release in the background at most once per hour. When `vX.Y.Z available · U: update` appears in Fleet, press `U` to review the running and available versions and exact replacement path. Nothing downloads until you confirm **Update in place**. `Esc` or Cancel leaves without changing anything; a protected standalone installation may show the system terminal's sudo prompt for the narrowly scoped replacement. The updater replaces only the inspected executable in place, never changes `PATH` or other installations. Restart saltrtui after a successful update.
+
+## Usage
 
 Launch the installed binary on the Salt master:
 
@@ -52,19 +69,14 @@ Press `?` in the application for keyboard help. Use `-no-alt-screen` if you need
 
 ## Build from source
 
-Use the Go version declared in `go.mod`. The verification script runs tests, vet, package builds, and a Linux amd64 build:
+Use the Go version declared in `go.mod`.
 
 ```sh
 scripts/verify.sh
 ```
 
-To build only the Linux amd64 executable, run `scripts/build-linux-amd64.sh`. Output is written to the ignored `dist/saltrtui-linux-amd64` path. An optional stable version argument embeds a release tag instead of `dev`:
+The verification gate runs tests, vet, package builds, the fresh Linux amd64 development executable, and cross-builds all four release targets. `scripts/package-release.sh v1.2.3` creates four deterministic archives and `SHA256SUMS` under `dist/release/v1.2.3/`; it does not create a tag or publish a release. Linux cross-build and container checks do not prove native macOS behavior or live Salt compatibility.
 
-```sh
-scripts/build-linux-amd64.sh v1.2.3
-dist/saltrtui-linux-amd64 --version
-```
+## License
 
-On Linux amd64, `scripts/package-release.sh v1.2.3` creates a verified gzip archive and `SHA256SUMS` under `dist/release/v1.2.3/`. This example version does not create a Git tag or publish anything. Packaging refuses an existing output directory rather than overwriting it.
-
-Maintainers publish by pushing an intentional stable tag in this public repository after CI passes. The release workflow independently verifies the tagged commit and smoke-tests the binary on Ubuntu and Debian before uploading assets to a draft and publishing it. Existing releases/drafts are never overwritten; inspect and explicitly clean up an incomplete draft before rerunning publication. Go checks and version smoke tests do not validate live Salt behavior.
+Released under the [MIT License](LICENSE).

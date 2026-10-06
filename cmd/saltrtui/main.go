@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 
 	tea "charm.land/bubbletea/v2"
 	"saltrtui/internal/app"
 	"saltrtui/internal/cache"
+	"saltrtui/internal/release"
 	"saltrtui/internal/saltcli"
 )
 
@@ -19,6 +21,14 @@ func main() {
 }
 
 func run(args []string, stdout, stderr io.Writer) int {
+	if len(args) == 5 && args[0] == "--install-stdin" {
+		length, err := strconv.ParseInt(args[4], 10, 64)
+		if err != nil || release.InstallFromReader(args[1], args[2], args[3], length, os.Stdin) != nil {
+			fmt.Fprintln(stderr, "saltrtui: installation failed")
+			return 1
+		}
+		return 0
+	}
 	flags := flag.NewFlagSet("saltrtui", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	configDir := flags.String("config-dir", "", "Salt master configuration directory (default: Salt's own lookup)")

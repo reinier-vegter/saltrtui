@@ -451,7 +451,7 @@ func Render(v ViewData) string {
 		return ""
 	}
 	hints := []hint{{"h", "highstate"}, {"s", "console"}, {"g", "graph"}, {"t", "targets"}, {"/", "search"}, {"enter", "inspect"}, {"tab", "panel"}, {"r", "refresh"}, {"?", "help"}, {"q", "quit"}}
-	showUpdate := v.AvailableUpdate != "" && !v.Searching && !v.DetailSearching
+	showUpdate := v.AvailableUpdate != "" && !v.Searching && !v.DetailSearching && !v.Help
 	if showUpdate {
 		hints = append(hints, hint{"U", "update"})
 	}

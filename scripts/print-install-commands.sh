@@ -12,7 +12,5 @@ version=$1
 archive="saltrtui_${version}_linux_amd64.gz"
 url="https://github.com/reinier-vegter/saltrtui/releases/download/$version/$archive"
 
-printf '%s\n' 'Ubuntu 24.04 (Linux amd64):'
-printf 'mkdir -p "$HOME/.local/bin" && (d=$(mktemp -d "$HOME/.local/bin/.saltrtui.XXXXXX") && trap '\''rm -rf "$d"'\'' EXIT && curl -fL '\''%s'\'' -o "$d/archive.gz" && gzip -dc "$d/archive.gz" > "$d/saltrtui" && chmod 755 "$d/saltrtui" && mv -fT "$d/saltrtui" "$HOME/.local/bin/saltrtui")\n' "$url"
-printf '\n%s\n' 'Debian bookworm (Linux amd64):'
-printf 'mkdir -p "$HOME/.local/bin" && (d=$(mktemp -d "$HOME/.local/bin/.saltrtui.XXXXXX") && trap '\''rm -rf "$d"'\'' EXIT && curl -fL '\''%s'\'' -o "$d/archive.gz" && gzip -dc "$d/archive.gz" > "$d/saltrtui" && chmod 755 "$d/saltrtui" && mv -fT "$d/saltrtui" "$HOME/.local/bin/saltrtui")\n' "$url"
+printf '%s\n' 'Linux amd64:'
+printf 'd=$(mktemp -d) && trap '\''rm -rf "$d"'\'' EXIT && curl -fL '\''%s'\'' -o "$d/archive.gz" && gzip -dc "$d/archive.gz" > "$d/saltrtui" && test -s "$d/saltrtui" && sudo mkdir -p /usr/local/bin && test ! -L /usr/local/bin/saltrtui && sudo install -m 0755 "$d/saltrtui" /usr/local/bin/saltrtui\n' "$url"
