@@ -26,7 +26,7 @@ func fixture(t *testing.T) string {
 	if err := os.MkdirAll(filepath.Join(root, "scripts"), 0755); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"validate-release-version.sh", "build-linux-amd64.sh", "build-targets.sh", "package-release.sh", "print-install-commands.sh"} {
+	for _, name := range []string{"validate-release-version.sh", "build-linux-amd64.sh", "build-targets.sh", "package-release.sh", "print-install-commands.sh", "refresh-readme-install.sh"} {
 		data, err := os.ReadFile(name)
 		if err != nil {
 			t.Fatal(err)
@@ -34,6 +34,44 @@ func fixture(t *testing.T) string {
 		write(t, filepath.Join(root, "scripts", name), string(data))
 	}
 	return root
+}
+
+func TestRefreshReadmeInstall(t *testing.T) {
+	root := fixture(t)
+	readme := `# saltrtui
+
+before
+<!-- release-installation:start -->
+old installation content
+<!-- release-installation:end -->
+after
+`
+	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte(readme), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := script(t, root, "refresh-readme-install.sh", "v1.2.3"); err != nil {
+		t.Fatalf("refresh README: %v %s", err, out)
+	}
+	text, err := os.ReadFile(filepath.Join(root, "README.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"before", "after", "saltrtui_v1.2.3_linux_amd64.gz", "saltrtui_v1.2.3_linux_arm64.gz",
+		"saltrtui_v1.2.3_darwin_amd64.gz", "saltrtui_v1.2.3_darwin_arm64.gz",
+		"curl -fsSL", "| gunzip | sudo install -m 0755 /dev/stdin /usr/local/bin/saltrtui",
+		"sudo mkdir -p /usr/local/bin", "saltrtui v1.2.3",
+	} {
+		if !strings.Contains(string(text), want) {
+			t.Fatalf("missing %q in refreshed README:\n%s", want, text)
+		}
+	}
+	if strings.Contains(string(text), "old installation content") {
+		t.Fatalf("old installation content remained:\n%s", text)
+	}
+	if _, err := script(t, root, "refresh-readme-install.sh", "dev"); err == nil {
+		t.Fatal("development release accepted")
+	}
 }
 
 func TestPrintInstallCommands(t *testing.T) {

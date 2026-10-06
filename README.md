@@ -23,18 +23,18 @@
 
 ## Installation
 
-The current stable release is [v0.0.2](https://github.com/reinier-vegter/saltrtui/releases/tag/v0.0.2). Its available Linux amd64 archive can be installed as follows. Future releases will provide the complete four-platform matrix below; do not use an unlisted filename before it is published.
+<!-- release-installation:start -->
+
+The current stable release is [v0.0.2](https://github.com/reinier-vegter/saltrtui/releases/tag/v0.0.2). Its available Linux amd64 archive can be installed as follows. Future releases will provide the complete four-platform matrix below; do not use an unlisted filename before it is published. These commands require `curl`, `gunzip`, and `sudo`.
 
 ### Linux
 
 **Intel/AMD 64-bit:** [saltrtui_v0.0.2_linux_amd64.gz](https://github.com/reinier-vegter/saltrtui/releases/download/v0.0.2/saltrtui_v0.0.2_linux_amd64.gz)
 
 ```sh
-gunzip saltrtui_v0.0.2_linux_amd64.gz
-test -s saltrtui_v0.0.2_linux_amd64
 sudo mkdir -p /usr/local/bin
 test ! -L /usr/local/bin/saltrtui
-sudo install -m 0755 saltrtui_v0.0.2_linux_amd64 /usr/local/bin/saltrtui
+curl -fsSL 'https://github.com/reinier-vegter/saltrtui/releases/download/v0.0.2/saltrtui_v0.0.2_linux_amd64.gz' | gunzip | sudo install -m 0755 /dev/stdin /usr/local/bin/saltrtui
 ```
 
 Linux arm64 will be available in the next stable release.
@@ -52,9 +52,7 @@ saltrtui --version
 
 The command should resolve to `/usr/local/bin/saltrtui` and report `saltrtui v0.0.2`. If it does not, put `/usr/local/bin` on `PATH`, clear the shell command cache (for example, `hash -r` in Bash), and check again. Do not overwrite a package-managed executable; use its distribution channel or install the standalone release in a safe location instead.
 
-### Update
-
-Stable release installs check GitHub for a newer stable release in the background at most once per hour. When `vX.Y.Z available · U: update` appears in Fleet, press `U` to review the running and available versions and exact replacement path. Nothing downloads until you confirm **Update in place**. `Esc` or Cancel leaves without changing anything; a protected standalone installation may show the system terminal's sudo prompt for the narrowly scoped replacement. The updater replaces only the inspected executable in place, never changes `PATH` or other installations. Restart saltrtui after a successful update.
+<!-- release-installation:end -->
 
 ## Usage
 
