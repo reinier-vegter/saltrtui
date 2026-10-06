@@ -25,23 +25,43 @@
 
 <!-- release-installation:start -->
 
-The current stable release is [v0.0.2](https://github.com/reinier-vegter/saltrtui/releases/tag/v0.0.2). Its available Linux amd64 archive can be installed as follows. Future releases will provide the complete four-platform matrix below; do not use an unlisted filename before it is published. These commands require `curl`, `gunzip`, and `sudo`.
+The current stable release is [v0.0.5](https://github.com/reinier-vegter/saltrtui/releases/tag/v0.0.5). Choose the archive for your operating system and architecture. These commands require `curl`, `gunzip`, and `sudo`.
 
 ### Linux
 
-**Intel/AMD 64-bit:** [saltrtui_v0.0.2_linux_amd64.gz](https://github.com/reinier-vegter/saltrtui/releases/download/v0.0.2/saltrtui_v0.0.2_linux_amd64.gz)
+**Intel/AMD 64-bit (`x86_64`):** [saltrtui_v0.0.5_linux_amd64.gz](https://github.com/reinier-vegter/saltrtui/releases/download/v0.0.5/saltrtui_v0.0.5_linux_amd64.gz)
 
 ```sh
 sudo mkdir -p /usr/local/bin
 test ! -L /usr/local/bin/saltrtui
-curl -fsSL 'https://github.com/reinier-vegter/saltrtui/releases/download/v0.0.2/saltrtui_v0.0.2_linux_amd64.gz' | gunzip | sudo install -m 0755 /dev/stdin /usr/local/bin/saltrtui
+curl -fsSL 'https://github.com/reinier-vegter/saltrtui/releases/download/v0.0.5/saltrtui_v0.0.5_linux_amd64.gz' | gunzip | sudo install -m 0755 /dev/stdin /usr/local/bin/saltrtui
 ```
 
-Linux arm64 will be available in the next stable release.
+**ARM 64-bit (`aarch64` / `arm64`):** [saltrtui_v0.0.5_linux_arm64.gz](https://github.com/reinier-vegter/saltrtui/releases/download/v0.0.5/saltrtui_v0.0.5_linux_arm64.gz)
+
+```sh
+sudo mkdir -p /usr/local/bin
+test ! -L /usr/local/bin/saltrtui
+curl -fsSL 'https://github.com/reinier-vegter/saltrtui/releases/download/v0.0.5/saltrtui_v0.0.5_linux_arm64.gz' | gunzip | sudo install -m 0755 /dev/stdin /usr/local/bin/saltrtui
+```
 
 ### macOS
 
-macOS archives will be available in the next stable release.
+**Intel Mac:** [saltrtui_v0.0.5_darwin_amd64.gz](https://github.com/reinier-vegter/saltrtui/releases/download/v0.0.5/saltrtui_v0.0.5_darwin_amd64.gz)
+
+```sh
+sudo mkdir -p /usr/local/bin
+test ! -L /usr/local/bin/saltrtui
+curl -fsSL 'https://github.com/reinier-vegter/saltrtui/releases/download/v0.0.5/saltrtui_v0.0.5_darwin_amd64.gz' | gunzip | sudo install -m 0755 /dev/stdin /usr/local/bin/saltrtui
+```
+
+**Apple Silicon Mac (M-series):** [saltrtui_v0.0.5_darwin_arm64.gz](https://github.com/reinier-vegter/saltrtui/releases/download/v0.0.5/saltrtui_v0.0.5_darwin_arm64.gz)
+
+```sh
+sudo mkdir -p /usr/local/bin
+test ! -L /usr/local/bin/saltrtui
+curl -fsSL 'https://github.com/reinier-vegter/saltrtui/releases/download/v0.0.5/saltrtui_v0.0.5_darwin_arm64.gz' | gunzip | sudo install -m 0755 /dev/stdin /usr/local/bin/saltrtui
+```
 
 Confirm command resolution and the installed release:
 
@@ -50,7 +70,7 @@ command -v saltrtui
 saltrtui --version
 ```
 
-The command should resolve to `/usr/local/bin/saltrtui` and report `saltrtui v0.0.2`. If it does not, put `/usr/local/bin` on `PATH`, clear the shell command cache (for example, `hash -r` in Bash), and check again. Do not overwrite a package-managed executable; use its distribution channel or install the standalone release in a safe location instead.
+The command should resolve to `/usr/local/bin/saltrtui` and report `saltrtui v0.0.5`. If it does not, put `/usr/local/bin` on `PATH`, clear the shell command cache (for example, `hash -r` in Bash), and check again. Do not overwrite a package-managed executable; use its distribution channel or install the standalone release in a safe location instead.
 
 <!-- release-installation:end -->
 
