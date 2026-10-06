@@ -35,7 +35,12 @@ for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
     if [ "$arch" = amd64 ]; then grep -q 'GOAMD64=v1' "$stage/build-metadata"; fi
     if [ "$arch" = arm64 ]; then grep -q 'GOARM64=v8.0' "$stage/build-metadata"; fi
     if [ "$os" = linux ]; then
-        test "$("$binary" --version)" = "saltrtui $version"
+        # The packaging host is Linux amd64. Runtime validation for linux/arm64
+        # happens under emulation in the release workflow below; executing it
+        # here would fail before that matrix can run.
+        if [ "$arch" = amd64 ]; then
+            test "$("$binary" --version)" = "saltrtui $version"
+        fi
         ! readelf -l "$binary" | grep -q 'Requesting program interpreter'
         ! readelf -d "$binary" | grep -q 'NEEDED'
     fi

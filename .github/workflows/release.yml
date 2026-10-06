@@ -63,7 +63,9 @@ jobs:
           for arch in amd64 arm64; do
             gzip -dc "dist/release/$RELEASE_TAG/saltrtui_${RELEASE_TAG}_linux_${arch}.gz" > "dist/smoke-saltrtui-$arch"
             chmod 755 "dist/smoke-saltrtui-$arch"
-            test "$("dist/smoke-saltrtui-$arch" --version)" = "saltrtui $RELEASE_TAG"
+            if [ "$arch" = amd64 ]; then
+              test "$("dist/smoke-saltrtui-$arch" --version)" = "saltrtui $RELEASE_TAG"
+            fi
             for image in ubuntu:24.04 debian:bookworm-slim; do
               result=$(docker run --rm --network none --platform "linux/$arch" \
                 --mount "type=bind,src=$PWD/dist/smoke-saltrtui-$arch,dst=/saltrtui,readonly" \

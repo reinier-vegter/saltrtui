@@ -211,7 +211,10 @@ while [ "$#" -gt 0 ]; do
     shift
 done
 test -n "$version"
-printf '#!/bin/sh\nprintf "saltrtui %s\\n"\n' "$version" > "$output"
+case "$GOOS/$GOARCH" in
+  linux/amd64) printf '#!/bin/sh\nprintf "saltrtui %s\\n"\n' "$version" > "$output" ;;
+  *) printf '#!/bin/sh\nexit 126\n' > "$output" ;;
+esac
 chmod 755 "$output"
 if [ "${FAIL_BUILD:-}" = yes ]; then exit 1; fi
 `)
