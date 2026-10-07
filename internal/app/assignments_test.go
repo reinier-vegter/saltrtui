@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"saltrtui/internal/assignments"
 )
 
@@ -16,7 +17,7 @@ func TestAssignmentsTopLevelTreeAndFleetContext(t *testing.T) {
 	m = update(m, keysLoaded{"master-a", 0, []string{"web-02", "web-01"}, time.Now(), nil})
 	m.search.SetValue("web-01")
 	m.alignSelection()
-	m = press(m, '3')
+	m = press(m, 'a')
 	if m.activeView != 9 || m.assignments == nil || !m.assignments.observation.Busy {
 		t.Fatal("Assignments tab did not open and start its first fetch")
 	}
@@ -28,7 +29,7 @@ func TestAssignmentsTopLevelTreeAndFleetContext(t *testing.T) {
 	if got := m.assignments.selected; got != assignments.EnvironmentID("base") {
 		t.Fatalf("initial tree selection = %q", got)
 	}
-	if view := m.View().Content; !strings.Contains(view, "3 Assignments") || !strings.Contains(view, "apps.web") || strings.Contains(view, "web-01") {
+	if view := ansi.Strip(m.View().Content); !strings.Contains(view, "Assignments") || !strings.Contains(view, "apps.web") || strings.Contains(view, "web-01") {
 		t.Fatalf("unexpected collapsed tree:\n%s", view)
 	}
 	m = press(m, tea.KeyDown)
@@ -37,7 +38,7 @@ func TestAssignmentsTopLevelTreeAndFleetContext(t *testing.T) {
 	if view := m.View().Content; !strings.Contains(view, "web-01") || !strings.Contains(view, "web-02") {
 		t.Fatalf("expanding baseline did not reveal its responding minions:\n%s", view)
 	}
-	m = press(m, '1')
+	m = press(m, 'f')
 	if m.activeView != 0 || m.selected != "web-01" || m.search.Value() != "web-01" {
 		t.Fatal("switching back from Assignments lost Fleet context")
 	}
@@ -47,7 +48,7 @@ func TestAssignmentsFilterAndFailurePreserveTree(t *testing.T) {
 	m := New(fakeGateway{}, "master-a", true)
 	m = update(m, tea.WindowSizeMsg{Width: 90, Height: 18})
 	m = update(m, keysLoaded{"master-a", 0, []string{"web-01"}, time.Now(), nil})
-	m = press(m, '3')
+	m = press(m, 'a')
 	at := time.Now()
 	m = update(m, stateTopLoaded{"master-a", 1, []string{"web-01"}, assignments.Top{"web-01": {"base": {"baseline", "apps.web"}}}, at, nil})
 	m = press(m, '/')

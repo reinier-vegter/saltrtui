@@ -88,7 +88,7 @@ func TestKeyManagementConfirmationAndResult(t *testing.T) {
 	backend := &fakeKeys{}
 	m := NewWithKeys(fakeGateway{}, nil, nil, nil, nil, backend, "master-a", true)
 	m = update(m, tea.WindowSizeMsg{Width: 90, Height: 18})
-	m = press(m, '6')
+	m = press(m, 'k')
 	if m.activeView != 6 || !m.key.list.Busy {
 		t.Fatal("keys did not load")
 	}
@@ -101,7 +101,7 @@ func TestKeyManagementConfirmationAndResult(t *testing.T) {
 	if !strings.Contains(ansi.Strip(m.View().Content), "Announced: Unknown") {
 		t.Fatal("pending timestamp mislabeled")
 	}
-	m = press(m, 'a')
+	m = press(m, 'A')
 	if m.key.confirm != keys.Accept || !strings.Contains(ansi.Strip(m.View().Content), "Confirm accept") {
 		t.Fatal("confirmation missing")
 	}
@@ -109,7 +109,7 @@ func TestKeyManagementConfirmationAndResult(t *testing.T) {
 	if m.key.confirm != "" || backend.calls != 0 {
 		t.Fatal("escape did not cancel")
 	}
-	m = press(m, 'a')
+	m = press(m, 'A')
 	model, cmd := m.Update(tea.KeyPressMsg{Code: 'y'})
 	m = model.(Model)
 	if cmd == nil || !m.key.busy || backend.calls != 0 {
@@ -132,7 +132,7 @@ func TestKeyManagementConfirmationAndResult(t *testing.T) {
 func TestKeySearchLateResultsAndFailure(t *testing.T) {
 	m := NewWithKeys(fakeGateway{}, nil, nil, nil, nil, &fakeKeys{}, "master-a", false)
 	m = update(m, tea.WindowSizeMsg{Width: 35, Height: 10})
-	m = press(m, '6')
+	m = press(m, 'k')
 	at := time.Now()
 	m = update(m, keyListLoaded{"master-a", 1, []keys.Key{{ID: "new-1", State: keys.Pending}, {ID: "web-01", State: keys.Accepted}}, at, nil})
 	m = press(m, '/')
@@ -158,7 +158,7 @@ func TestKeySearchLateResultsAndFailure(t *testing.T) {
 func TestDuplicateKeyStateDisablesAction(t *testing.T) {
 	m := NewWithKeys(fakeGateway{}, nil, nil, nil, nil, &fakeKeys{}, "master-a", true)
 	m = update(m, tea.WindowSizeMsg{Width: 110, Height: 25})
-	m = press(m, '6')
+	m = press(m, 'k')
 	m = update(m, keyListLoaded{"master-a", 1, []keys.Key{{ID: "same", State: keys.Accepted}, {ID: "same", State: keys.Denied}}, time.Now(), nil})
 	if !m.ambiguousKey() {
 		t.Fatal("duplicate ID in different Salt states not recognized")

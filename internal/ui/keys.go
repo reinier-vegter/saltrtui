@@ -90,7 +90,7 @@ func keyDetailLines(v KeysViewData, width int) []string {
 	}
 	switch v.Selected.State {
 	case "pending":
-		lines = append(lines, "a accept · b block (reject)")
+		lines = append(lines, "A accept · b block (reject)")
 	case "accepted":
 		lines = append(lines, "d deny/revoke (delete accepted key)", "A revoked minion may announce again.")
 	case "rejected":
@@ -106,8 +106,8 @@ func keyDetailLines(v KeysViewData, width int) []string {
 }
 
 func keyHelp() []string {
-	return []string{"Master key management", "", "6 Keys  1 Fleet  2 Jobs  4 Events",
-		"/ search IDs/states  tab switch panels", "enter inspect key fingerprint", "a accept pending  b block pending (reject)",
+	return []string{"Master key management", "", "f Fleet  j Jobs  a Assignments  e Events  k Keys",
+		"/ search IDs/states  tab switch panels", "enter inspect key fingerprint", "A accept pending  b block pending (reject)",
 		"d deny/revoke accepted (delete)", "y confirm  n/esc cancel", "r refresh keys  pgup/pgdown page", "? help  q quit", "",
 		"Denied is an automatic Salt key state, not revoke.",
 		"Pending minions cannot report remote grains.", "Key-file mtime is not an announcement timestamp."}
@@ -137,7 +137,7 @@ func RenderKeys(v KeysViewData) string {
 	if !v.Busy && !v.List.Busy && v.List.Err == nil && !v.Ambiguous {
 		switch v.Selected.State {
 		case "pending":
-			hints = append(hints, hint{"a", "accept"}, hint{"b", "block"})
+			hints = append(hints, hint{"A", "accept"}, hint{"b", "block"})
 		case "accepted":
 			hints = append(hints, hint{"d", "deny/revoke"})
 		}
@@ -172,10 +172,7 @@ func RenderKeys(v KeysViewData) string {
 	if h == 1 {
 		return actionBar(w, notice, alert, hints...)
 	}
-	frame := []string{modeBar(w, "Keys", v.Context, "")}
-	if h >= 4 {
-		frame = append(frame, muted.Render(strings.Repeat("─", w)))
-	}
+	frame := modeFrame(w, h, "Keys", v.Context, "")
 	bodyHeight := h - len(frame) - 1
 	if bodyHeight > 0 {
 		var body string

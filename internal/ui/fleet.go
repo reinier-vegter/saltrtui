@@ -219,7 +219,7 @@ func panel(title string, lines []string, offset, width, height int, focused bool
 
 func targetLines(v ViewData, width, capacity int) ([]string, int, string) {
 	if len(v.Rows) == 0 {
-		message := "No accepted keys · 6 Keys: pending"
+		message := "No accepted keys · k Keys: pending"
 		switch {
 		case v.Inventory.Busy && v.Inventory.At.IsZero():
 			message = "Loading accepted keys…"
@@ -427,12 +427,12 @@ func styledLines(lines []string, width int) []string {
 
 func helpLines(width int) []string {
 	return styledLines([]string{
-		"Navigation", "", "1 Fleet  2 Jobs  3 Assignments  4 Events  6 Keys    switch workbench view",
+		"Navigation", "", "f Fleet  j Jobs  a Assignments  e Events  k Keys    switch workbench view",
 		"t              build a target from accepted minions",
 		"s              open selected minion command console",
 		"g              graph selected Linux minion resources",
 		"h              preview and review selected minion highstate",
-		"↑/↓ or j/k    move in Targets; scroll focused pane",
+		"↑/↓           move in Targets; scroll focused pane",
 		"pgup/pgdown    move a page in the focused pane",
 		"/              search focused Targets IDs or Details grains",
 		"enter          inspect / refresh selected grains",
@@ -475,14 +475,11 @@ func Render(v ViewData) string {
 	if h == 1 {
 		return actionBar(w, notice, alert, hints...)
 	}
-	frame := []string{modeBar(w, "Fleet", v.Context, "")}
+	frame := modeFrame(w, h, "Fleet", v.Context, "")
 	noticeLine := h >= 3 && showUpdate
 	if noticeLine {
 		label := " " + noticeStyle.Render(v.AvailableUpdate+" available") + "  " + keycap.Render("U") + item.Render(": update")
 		frame = append(frame, chromeLine(w, label))
-	}
-	if h >= 4+len(frame)-1 {
-		frame = append(frame, muted.Render(strings.Repeat("─", w)))
 	}
 	bodyHeight := h - len(frame) - 1
 	if bodyHeight > 0 {

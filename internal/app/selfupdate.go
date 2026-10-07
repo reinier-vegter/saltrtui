@@ -148,11 +148,11 @@ func (m Model) updateSelfUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	last := 1
 	switch key {
-	case "up", "k":
+	case "up":
 		if m.updateIndex > 0 {
 			m.updateIndex--
 		}
-	case "down", "j":
+	case "down":
 		if m.updateIndex < last {
 			m.updateIndex++
 		}

@@ -229,7 +229,7 @@ func (m Model) updateGraph(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.stopEvents()
 		m.stopGraph()
 		return m, tea.Quit
-	case "esc", "1":
+	case "esc":
 		m.stopGraph()
 		m.graph.open = false
 	case "?":

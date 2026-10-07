@@ -27,7 +27,7 @@ func TestJobsNavigationPreservesFleetAndIgnoresLateReturns(t *testing.T) {
 	m = press(m, '/')
 	m = typeText(m, "02")
 	m = press(m, tea.KeyEscape)
-	m = press(m, '2')
+	m = press(m, 'j')
 	if m.activeView != 1 || m.jobRequest != 1 || !m.jobList.Busy {
 		t.Fatal("Jobs did not start bounded list load")
 	}
@@ -55,11 +55,11 @@ func TestJobsNavigationPreservesFleetAndIgnoresLateReturns(t *testing.T) {
 	if !strings.Contains(m.View().Content, "Job detail") {
 		t.Fatal("job detail view not rendered")
 	}
-	m = press(m, '1')
+	m = press(m, 'f')
 	if m.activeView != 0 || m.selected != "web-02" || m.search.Value() != "02" {
 		t.Fatal("Fleet state discarded on return")
 	}
-	m = press(m, '2')
+	m = press(m, 'j')
 	if m.jobSearch.Value() != "state" || m.selectedJob != second.JID || m.jobRequest != 1 {
 		t.Fatal("Jobs state or cached list discarded on return")
 	}
@@ -76,7 +76,7 @@ func TestJobsNavigationPreservesFleetAndIgnoresLateReturns(t *testing.T) {
 func TestJobsNewestFirstEvenWhenBackendResultsAreUnsorted(t *testing.T) {
 	m := NewWithJobs(fakeGateway{}, fakeJobs{}, "master-a", true)
 	m = update(m, tea.WindowSizeMsg{Width: 100, Height: 12})
-	m = press(m, '2')
+	m = press(m, 'j')
 	older := jobs.Summary{JID: "20260925123000000000", Function: "state.apply"}
 	newer := jobs.Summary{JID: "20260925125000000000", Function: "state.highstate"}
 	middle := jobs.Summary{JID: "20260925124000000000", Function: "test.ping"}

@@ -237,7 +237,7 @@ func (m Model) updateHighstate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			s.help, s.offset = false, 0
 			return m, nil
 		}
-		if key != "up" && key != "down" && key != "k" && key != "j" && key != "pgup" && key != "pgdown" {
+		if key != "up" && key != "down" && key != "pgup" && key != "pgdown" {
 			return m, nil
 		}
 	}
@@ -261,7 +261,7 @@ func (m Model) updateHighstate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.canApplyHighstate() {
 			s.confirm, s.status, s.offset = true, "", 0
 		}
-	case "up", "down", "k", "j", "pgup", "pgdown":
+	case "up", "down", "pgup", "pgdown":
 		s.offset = max(0, min(s.offset+scrollDelta(key, ui.PageRows(m.height, 1, false)), ui.HighstateScrollLimit(m.highstateViewData())))
 	}
 	return m, nil

@@ -81,10 +81,7 @@ func RenderSelfUpdate(v UpdateViewData) string {
 	if h == 1 {
 		return actionBar(w, "", false, hints...)
 	}
-	frame := []string{modeBar(w, "Fleet", v.Context, "Update")}
-	if h >= 4 {
-		frame = append(frame, muted.Render(strings.Repeat("─", w)))
-	}
+	frame := modeFrame(w, h, "Fleet", v.Context, "Update")
 	bodyHeight := h - len(frame) - 1
 	if bodyHeight > 0 {
 		body := panel("Update saltrtui", updateLines(v, w-4), 0, w, bodyHeight, true, nil)

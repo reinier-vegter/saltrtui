@@ -322,25 +322,19 @@ func (m Model) updateKeys(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.alignKeySelection()
 			return m, cmd
 		}
+		if cmd, handled := m.switchWorkspace(key); handled {
+			return m, cmd
+		}
 		switch key {
 		case "q":
 			m.stopEvents()
 			return m, tea.Quit
-		case "1", "esc":
-			if key == "esc" && m.key.focus == 1 {
+		case "esc":
+			if m.key.focus == 1 {
 				m.key.focus = 0
 				return m, nil
 			}
 			m.activeView = 0
-		case "2":
-			m.activeView = 1
-			if m.jobList.At.IsZero() && m.jobList.Err == nil {
-				return m, m.loadJobs()
-			}
-		case "3":
-			return m, m.openAssignments()
-		case "4":
-			return m, m.openEvents()
 		case "?":
 			m.help = true
 			m.key.helpOffset = 0
@@ -357,16 +351,16 @@ func (m Model) updateKeys(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.loadKeys()
 		case "enter":
 			return m, m.inspectKey()
-		case "a", "b", "d":
+		case "A", "b", "d":
 			if m.key.busy || m.key.list.Busy || m.key.list.Err != nil || m.key.selected.ID == "" || m.ambiguousKey() {
 				break
 			}
-			action := map[string]keys.Action{"a": keys.Accept, "b": keys.Block, "d": keys.Revoke}[key]
+			action := map[string]keys.Action{"A": keys.Accept, "b": keys.Block, "d": keys.Revoke}[key]
 			if m.key.selected.State == action.Expected() {
 				m.key.confirmedKey, m.key.confirm = m.key.selected, action
 				m.key.focus = 1
 			}
-		case "up", "down", "j", "k", "pgup", "pgdown":
+		case "up", "down", "pgup", "pgdown":
 			delta := scrollDelta(key, ui.PageRows(m.height, 1, false))
 			if m.key.focus == 0 {
 				m.moveKey(delta)

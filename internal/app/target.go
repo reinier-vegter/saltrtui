@@ -226,9 +226,9 @@ func (m Model) updateTarget(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if s.resultsFocus {
 			switch key {
-			case "up", "k":
+			case "up":
 				s.cursor = max(0, s.cursor-1)
-			case "down", "j":
+			case "down":
 				s.cursor = min(len(s.preview.Value.IDs)-1, s.cursor+1)
 			case "pgup", "pgdown":
 				s.cursor = max(0, min(len(s.preview.Value.IDs)-1, s.cursor+scrollDelta(key, max(1, m.height-7))))

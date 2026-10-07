@@ -143,7 +143,7 @@ func JobsScrollLimit(v JobsViewData, which int) int {
 	}
 	var lines []string
 	if which == 2 {
-		lines = styledLines([]string{"Jobs navigation", "", "1 Fleet  2 Jobs  4 Events  tab switch panels", "/ search JID/function/target  enter inspect job", "r refresh focused panel  pgup/pgdown page", "Missing returns do not imply failure or completion."}, width-4)
+		lines = styledLines([]string{"Jobs navigation", "", "f Fleet  j Jobs  a Assignments  e Events  k Keys", "tab switch panels  / search JID/function/target  enter inspect job", "r refresh focused panel  pgup/pgdown page", "Missing returns do not imply failure or completion."}, width-4)
 	} else if which == 1 {
 		lines = jobDetailLines(v, width-4)
 	} else {
@@ -173,15 +173,12 @@ func RenderJobs(v JobsViewData) string {
 	if h == 1 {
 		return actionBar(w, notice, alert, hints...)
 	}
-	frame := []string{modeBar(w, "Jobs", v.Context, "")}
-	if h >= 4 {
-		frame = append(frame, muted.Render(strings.Repeat("─", w)))
-	}
+	frame := modeFrame(w, h, "Jobs", v.Context, "")
 	bodyHeight := h - len(frame) - 1
 	if bodyHeight > 0 {
 		var body string
 		if v.Help {
-			body = panel("Jobs keys", styledLines([]string{"Jobs navigation", "", "1 Fleet  2 Jobs  4 Events  tab switch panels", "/ search JID/function/target  enter inspect job", "r refresh focused panel  pgup/pgdown page", "Missing returns do not imply failure or completion."}, w-4), v.HelpOffset, w, bodyHeight, true, nil)
+			body = panel("Jobs keys", styledLines([]string{"Jobs navigation", "", "f Fleet  j Jobs  a Assignments  e Events  k Keys", "tab switch panels  / search JID/function/target  enter inspect job", "r refresh focused panel  pgup/pgdown page", "Missing returns do not imply failure or completion."}, w-4), v.HelpOffset, w, bodyHeight, true, nil)
 		} else {
 			left := w
 			if w >= 68 {

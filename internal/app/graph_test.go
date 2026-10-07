@@ -215,7 +215,7 @@ func TestGraphOverlayCapturesInputAndEscapeRestoresFleet(t *testing.T) {
 		t.Fatal("duplicate reply accepted")
 	}
 	m = press(m, tea.KeyDown)
-	m = press(m, '2')
+	m = press(m, 'j')
 	m = update(m, tea.PasteMsg{Content: "hidden input"})
 	if m.activeView != 0 || m.selected != "web-01" || m.search.Value() != "web" {
 		t.Fatal("background received modal input")

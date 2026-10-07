@@ -90,9 +90,9 @@ func eventDetailLines(v EventsViewData, width int) []string {
 }
 
 func eventsHelp() []string {
-	return []string{"Live master events", "", "4 Events  1 Fleet  2 Jobs  esc leave Events",
+	return []string{"Live master events", "", "f Fleet  j Jobs  a Assignments  e Events  k Keys",
 		"tab switch list/detail  enter inspect payload", "/ filter tag, minion, JID, payload  pgup/pgdown page",
-		"a all  g jobs  m minions  K keys  p presence", "space pause/resume auto-follow  c clear local buffer",
+		"A all  g jobs  m minions  K keys  p presence", "space pause/resume auto-follow  c clear local buffer",
 		"r restart subscription (keep buffer)  ? help  ctrl+c quit", "", "Capture starts when the app launches and continues in other views.",
 		"No replay before launch or during gaps; drops are reported.",
 		"Presence/state progress events depend on Salt configuration."}
@@ -138,10 +138,7 @@ func RenderEvents(v EventsViewData) string {
 	if h == 1 {
 		return actionBar(w, notice, alert, hints...)
 	}
-	frame := []string{modeBar(w, "Events", v.Context, "")}
-	if h >= 4 {
-		frame = append(frame, muted.Render(strings.Repeat("─", w)))
-	}
+	frame := modeFrame(w, h, "Events", v.Context, "")
 	bodyHeight := h - len(frame) - 1
 	if bodyHeight > 0 {
 		var body string

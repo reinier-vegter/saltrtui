@@ -38,7 +38,7 @@ func TestJobsFullscreenAndReturns(t *testing.T) {
 	}
 	data.Width, data.Height, data.Help, data.Focus = 36, 8, false, 1
 	data.DetailOffset = JobsScrollLimit(data, 1)
-	if view := ansi.Strip(RenderJobs(data)); !strings.Contains(view, "Job detail") || !strings.Contains(view, "1 Fleet") {
+	if view := ansi.Strip(RenderJobs(data)); !strings.Contains(view, "Job detail") || !strings.Contains(view, "F") {
 		t.Fatalf("detail/footer lost: %s", view)
 	}
 }

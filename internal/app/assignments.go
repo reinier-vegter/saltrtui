@@ -271,23 +271,6 @@ func (m Model) updateAssignments(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	key := keyMsg.String()
-	if key == "1" {
-		m.activeView = 0
-		return m, nil
-	}
-	if key == "2" {
-		m.activeView = 1
-		if m.jobList.At.IsZero() && m.jobList.Err == nil {
-			return m, m.loadJobs()
-		}
-		return m, nil
-	}
-	if key == "4" {
-		return m, m.openEvents()
-	}
-	if key == "6" {
-		return m, m.openKeys()
-	}
 	if s.help {
 		switch key {
 		case "?", "esc":
@@ -312,6 +295,9 @@ func (m Model) updateAssignments(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.alignAssignmentSelection()
 		return m, cmd
 	}
+	if cmd, handled := m.switchWorkspace(key); handled {
+		return m, cmd
+	}
 	switch key {
 	case "q":
 		m.stopEvents()
@@ -334,7 +320,7 @@ func (m Model) updateAssignments(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if s.focus == 0 {
 			m.collapseAssignment()
 		}
-	case "up", "k", "down", "j", "pgup", "pgdown":
+	case "up", "down", "pgup", "pgdown":
 		delta := scrollDelta(key, ui.PageRows(m.height, s.focus, false))
 		if s.focus == 0 {
 			m.moveAssignment(delta)

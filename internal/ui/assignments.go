@@ -113,7 +113,7 @@ func assignmentsHelpLines(width int) []string {
 		"An SLS is not automatically a role, installed service, or applied state.", "",
 		"r              refresh assignments (a read-only Salt job)",
 		"enter/space/right expand an environment or SLS", "left          collapse an entry or select its parent",
-		"up/down j/k   move in the tree or scroll Details", "tab           switch panes",
+		"up/down       move in the tree or scroll Details", "tab           switch panes",
 		"/              filter environments, SLS names, or minion IDs locally", "?              close help",
 	}, width)
 }
@@ -167,10 +167,7 @@ func RenderAssignments(v AssignmentsViewData) string {
 	if h == 1 {
 		return actionBar(w, notice, alert, hints...)
 	}
-	frame := []string{modeBar(w, "Assignments", v.Context, "")}
-	if h >= 4 {
-		frame = append(frame, muted.Render(strings.Repeat("─", w)))
-	}
+	frame := modeFrame(w, h, "Assignments", v.Context, "")
 	bodyHeight := h - len(frame) - 1
 	if bodyHeight > 0 {
 		var body string

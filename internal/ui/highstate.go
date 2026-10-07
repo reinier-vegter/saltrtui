@@ -148,10 +148,7 @@ func RenderHighstate(v HighstateViewData) string {
 	if h == 1 {
 		return actionBar(w, notice, alert, hints...)
 	}
-	frame := []string{modeBar(w, "Fleet", v.Context, "Highstate · "+v.ID)}
-	if h >= 4 {
-		frame = append(frame, muted.Render(strings.Repeat("─", w)))
-	}
+	frame := modeFrame(w, h, "Fleet", v.Context, "Highstate · "+v.ID)
 	if bodyHeight := h - len(frame) - 1; bodyHeight > 0 {
 		name := "Highstate · one minion"
 		if v.Confirm {

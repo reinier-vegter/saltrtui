@@ -283,25 +283,19 @@ func (m Model) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.alignEvent()
 			return m, cmd
 		}
+		if cmd, handled := m.switchWorkspace(key); handled {
+			return m, cmd
+		}
 		switch key {
 		case "q":
 			m.stopEvents()
 			return m, tea.Quit
-		case "1", "esc":
-			if key == "esc" && m.event.focus == 1 {
+		case "esc":
+			if m.event.focus == 1 {
 				m.event.focus = 0
 				return m, nil
 			}
 			m.activeView = 0
-		case "2":
-			m.activeView = 1
-			if m.jobList.At.IsZero() && m.jobList.Err == nil {
-				return m, m.loadJobs()
-			}
-		case "3":
-			return m, m.openAssignments()
-		case "6":
-			return m, m.openKeys()
 		case "?":
 			m.help = true
 			m.event.helpOffset = 0
@@ -311,8 +305,8 @@ func (m Model) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "tab", "shift+tab":
 			m.event.focus = 1 - m.event.focus
-		case "a", "g", "m", "K", "p":
-			m.event.family = map[string]string{"a": "all", "g": "jobs", "m": "minions", "K": "keys", "p": "presence"}[key]
+		case "A", "g", "m", "K", "p":
+			m.event.family = map[string]string{"A": "all", "g": "jobs", "m": "minions", "K": "keys", "p": "presence"}[key]
 			m.alignEvent()
 		case "space", " ":
 			m.event.paused = !m.event.paused
@@ -335,7 +329,7 @@ func (m Model) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.event.focus = 1
 				m.event.detailOffset = 0
 			}
-		case "up", "down", "k", "j", "pgup", "pgdown":
+		case "up", "down", "pgup", "pgdown":
 			delta := scrollDelta(key, ui.PageRows(m.height, 1, false))
 			if m.event.focus == 0 {
 				m.eventMove(delta)

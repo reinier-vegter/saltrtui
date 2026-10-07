@@ -233,6 +233,47 @@ func TestSearchFollowsFocusedPanelWithoutTouchingOtherQuery(t *testing.T) {
 	}
 }
 
+func TestWorkspaceMnemonicsOwnJAndKOutsideTextEntry(t *testing.T) {
+	m := New(fakeGateway{}, "master-a", true)
+	m = update(m, tea.WindowSizeMsg{Width: 120, Height: 20})
+	m = update(m, keysLoaded{"master-a", 0, []string{"node-a", "node-b"}, time.Now(), nil})
+	m = press(m, 'j')
+	if m.activeView != 1 || m.selected != "node-a" {
+		t.Fatal("j should open Jobs without moving the Fleet selection")
+	}
+	m = press(m, 'f')
+	m = press(m, 'k')
+	if m.activeView != 6 {
+		t.Fatal("k should open Keys")
+	}
+	m = press(m, 'f')
+	m = press(m, 'a')
+	if m.activeView != 9 {
+		t.Fatal("a should open Assignments")
+	}
+	m = press(m, 'f')
+	m = press(m, 'e')
+	if m.activeView != 4 {
+		t.Fatal("e should open Events")
+	}
+	m = press(m, 'f')
+	m = press(m, '2')
+	if m.activeView != 0 {
+		t.Fatal("numeric aliases must not switch workspaces")
+	}
+	m = press(m, '/')
+	m = typeText(m, "j")
+	if m.activeView != 0 || m.search.Value() != "j" {
+		t.Fatal("focused search must retain printable workspace mnemonics")
+	}
+	m = update(m, tea.WindowSizeMsg{Width: ui.NavigationMinimumWidth() - 1, Height: 20})
+	m.search.Blur()
+	m = press(m, 'k')
+	if m.activeView != 0 {
+		t.Fatal("hidden tabs must not activate below the navigation minimum")
+	}
+}
+
 func TestPageKeysUseFocusedViewportAndClamp(t *testing.T) {
 	m := New(fakeGateway{}, "master-a", true)
 	m = update(m, tea.WindowSizeMsg{Width: 36, Height: 9})

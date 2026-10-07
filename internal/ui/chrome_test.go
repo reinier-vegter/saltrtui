@@ -26,7 +26,7 @@ func TestSharedNavigationAndActionFrame(t *testing.T) {
 		{"Update", "Fleet", func(w, h int) string { return RenderSelfUpdate(UpdateViewData{Width: w, Height: h}) }},
 	}
 	for _, view := range views {
-		for _, w := range []int{120, 80, 36, 20, 5, 1} {
+		for _, w := range []int{120, 80, 42, NavigationMinimumWidth(), NavigationMinimumWidth() - 1, 5, 1} {
 			for _, h := range []int{20, 8, 4, 2, 1} {
 				t.Run(view.name, func(t *testing.T) {
 					lines := strings.Split(view.render(w, h), "\n")
@@ -38,15 +38,12 @@ func TestSharedNavigationAndActionFrame(t *testing.T) {
 							t.Fatalf("%dx%d: row is %d cells: %q", w, h, lipgloss.Width(line), ansi.Strip(line))
 						}
 					}
-					if w >= 36 && h >= 2 {
+					if w >= NavigationMinimumWidth() && h >= 2 {
 						header := ansi.Strip(lines[0])
 						last := -1
-						modes := []string{"1 Fleet", "2 Jobs", "3 Assignments", "4 Events", "6 Keys"}
-						if w < 70 {
-							modes = []string{"1 F", "2 J", "3 A", "4 E", "6 K"}
-							if w >= 36 {
-								modes[0] = "1 Fleet"
-							}
+						modes := []string{"Fleet", "Jobs", "Assignments", "Events", "Keys"}
+						if w < 51 {
+							modes = []string{"F", "J", "A", "E", "K"}
 						}
 						for _, mode := range modes {
 							pos := strings.Index(header, mode)
@@ -58,9 +55,11 @@ func TestSharedNavigationAndActionFrame(t *testing.T) {
 						if !strings.Contains(lines[0], "\x1b[") || !strings.Contains(ansi.Strip(lines[h-1]), "│") {
 							t.Fatalf("unframed or unstyled chrome: %q / %q", header, ansi.Strip(lines[h-1]))
 						}
-						if strings.Contains(ansi.Strip(lines[h-1]), "1 Fleet") {
-							t.Fatal("footer repeats the mode list")
+						if h >= 4 && !strings.Contains(ansi.Strip(lines[1]), "━") {
+							t.Fatalf("active tab rail missing: %q", ansi.Strip(lines[1]))
 						}
+					} else if w >= 8 && w < NavigationMinimumWidth() && h >= 2 && !strings.Contains(ansi.Strip(lines[0]), "Resize") {
+						t.Fatalf("missing below-minimum resize state: %q", ansi.Strip(lines[0]))
 					}
 				})
 			}
@@ -71,11 +70,11 @@ func TestSharedNavigationAndActionFrame(t *testing.T) {
 func TestPresenceErrorKeepsModesAndRetry(t *testing.T) {
 	v := ViewData{Width: 120, Height: 12, Presence: Source{Err: errors.New("presence: Salt emitted diagnostics on stderr; check Salt logs")}}
 	lines := strings.Split(ansi.Strip(Render(v)), "\n")
-	if !strings.Contains(lines[0], "6 Keys") || !strings.Contains(lines[len(lines)-1], "r: retry") ||
+	if !strings.Contains(lines[0], "Keys") || !strings.Contains(lines[len(lines)-1], "r: retry") ||
 		!strings.Contains(lines[len(lines)-1], "Presence: Salt emitted diagnostics") || strings.Contains(lines[len(lines)-1], "Presence: presence:") {
 		t.Fatalf("presence failure hid navigation or duplicated source: %q / %q", lines[0], lines[len(lines)-1])
 	}
-	if !strings.Contains(ansi.Strip(Render(ViewData{Width: 120, Height: 12, Inventory: Source{At: time.Now()}})), "No accepted keys · 6 Keys") {
+	if !strings.Contains(ansi.Strip(Render(ViewData{Width: 120, Height: 12, Inventory: Source{At: time.Now()}})), "No accepted keys · k Keys") {
 		t.Fatal("empty accepted inventory did not direct operator to Keys")
 	}
 	v.Width = 36
@@ -85,10 +84,33 @@ func TestPresenceErrorKeepsModesAndRetry(t *testing.T) {
 	}
 }
 
+func TestModeFrameAlignsOneActiveRailAndNeverClipsTabs(t *testing.T) {
+	for _, mode := range []string{"Fleet", "Jobs", "Assignments", "Events", "Keys"} {
+		frame := modeFrame(120, 12, mode, "", "")
+		rail := ansi.Strip(frame[1])
+		if strings.Count(rail, "━") != len(mode)+2 || strings.Count(rail, "━") == 0 {
+			t.Fatalf("%s rail does not span its padded label: %q", mode, rail)
+		}
+	}
+	for _, width := range []int{NavigationMinimumWidth(), NavigationMinimumWidth() - 1} {
+		frame := modeFrame(width, 8, "Fleet", "", "")
+		header := ansi.Strip(frame[0])
+		if width == NavigationMinimumWidth() {
+			for _, tab := range []string{"F", "J", "A", "E", "K"} {
+				if !strings.Contains(header, tab) {
+					t.Fatalf("minimum navigation width hid %q: %q", tab, header)
+				}
+			}
+		} else if !strings.Contains(header, "Resize") {
+			t.Fatalf("below minimum did not replace tabs with resize guidance: %q", header)
+		}
+	}
+}
+
 func TestKeyConfirmationRetainsActions(t *testing.T) {
 	v := KeysViewData{Width: 100, Height: 12, Confirm: "accept", Selected: KeyRow{ID: "pending-1", State: "pending"}}
 	lines := strings.Split(ansi.Strip(RenderKeys(v)), "\n")
-	if !strings.Contains(lines[0], "6 Keys") || !strings.Contains(lines[len(lines)-1], "y: confirm") || !strings.Contains(lines[len(lines)-1], "n/esc: cancel") || !strings.Contains(lines[len(lines)-1], "pending-1") {
+	if !strings.Contains(lines[0], "Keys") || !strings.Contains(lines[len(lines)-1], "y: confirm") || !strings.Contains(lines[len(lines)-1], "n/esc: cancel") || !strings.Contains(lines[len(lines)-1], "pending-1") {
 		t.Fatalf("confirmation chrome incomplete: %q / %q", lines[0], lines[len(lines)-1])
 	}
 }
@@ -120,7 +142,7 @@ func TestKeysOnlyAdvertisesAvailableMutations(t *testing.T) {
 		for _, blocked := range []bool{false, true} {
 			v := KeysViewData{Width: 160, Height: 12, Selected: KeyRow{ID: "key", State: state}, Ambiguous: blocked}
 			footer := ansi.Strip(strings.Split(RenderKeys(v), "\n")[v.Height-1])
-			if strings.Contains(footer, "a: accept") != (state == "pending" && !blocked) ||
+			if strings.Contains(footer, "A: accept") != (state == "pending" && !blocked) ||
 				strings.Contains(footer, "b: block") != (state == "pending" && !blocked) ||
 				strings.Contains(footer, "d: deny/revoke") != (state == "accepted" && !blocked) {
 				t.Fatalf("%s blocked=%v: %q", state, blocked, footer)

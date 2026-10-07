@@ -135,10 +135,7 @@ func RenderTarget(v TargetViewData) string {
 	if h == 1 {
 		return actionBar(w, notice, false, hints...)
 	}
-	frame := []string{modeBar(w, "Fleet", v.Context, "Target builder")}
-	if h >= 4 {
-		frame = append(frame, muted.Render(strings.Repeat("─", w)))
-	}
+	frame := modeFrame(w, h, "Fleet", v.Context, "Target builder")
 	if bodyHeight := h - len(frame) - 1; bodyHeight > 0 {
 		body := panel("Accepted-key target preview", targetBuilderLines(v, max(1, w-4)), v.Offset, w, bodyHeight, true, nil)
 		frame = append(frame, strings.Split(body, "\n")...)

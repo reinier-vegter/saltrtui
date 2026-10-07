@@ -319,15 +319,10 @@ func (m Model) updateJobs(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.alignJobSelection()
 			return m, cmd
 		}
+		if cmd, handled := m.switchWorkspace(key); handled {
+			return m, cmd
+		}
 		switch key {
-		case "1":
-			m.activeView = 0
-		case "3":
-			return m, m.openAssignments()
-		case "4":
-			return m, m.openEvents()
-		case "6":
-			return m, m.openKeys()
 		case "q":
 			m.stopEvents()
 			return m, tea.Quit
@@ -349,7 +344,7 @@ func (m Model) updateJobs(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.loadJob()
 		case "enter":
 			return m, m.loadJob()
-		case "up", "down", "j", "k", "pgup", "pgdown":
+		case "up", "down", "pgup", "pgdown":
 			delta := scrollDelta(key, ui.PageRows(m.height, 1, false))
 			if m.jobFocus == 0 {
 				m.moveJob(delta)
@@ -407,6 +402,35 @@ func (m *Model) refresh() tea.Cmd {
 
 func (m *Model) visibleIDs() []string {
 	return fleet.FilterIDs(m.keys.Value, m.search.Value())
+}
+
+// switchWorkspace handles the shared top-bar mnemonics after the active input,
+// confirmation, or overlay has had a chance to own printable keys.
+func (m *Model) switchWorkspace(key string) (tea.Cmd, bool) {
+	if m.width > 0 && m.width < ui.NavigationMinimumWidth() {
+		switch key {
+		case "f", "j", "a", "e", "k":
+			return nil, true
+		}
+	}
+	switch key {
+	case "f":
+		m.activeView = 0
+		return nil, true
+	case "j":
+		m.activeView = 1
+		if m.jobList.At.IsZero() && m.jobList.Err == nil {
+			return m.loadJobs(), true
+		}
+		return nil, true
+	case "a":
+		return m.openAssignments(), true
+	case "e":
+		return m.openEvents(), true
+	case "k":
+		return m.openKeys(), true
+	}
+	return nil, false
 }
 
 func (m *Model) alignSelection() {
@@ -708,21 +732,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.detailOffset = 0
 			return m, cmd
 		}
-		if key == "2" {
-			m.activeView = 1
-			if m.jobList.At.IsZero() && m.jobList.Err == nil {
-				return m, m.loadJobs()
-			}
-			return m, nil
-		}
-		if key == "3" && !m.help {
-			return m, m.openAssignments()
-		}
-		if key == "4" && !m.help {
-			return m, m.openEvents()
-		}
-		if key == "6" && !m.help {
-			return m, m.openKeys()
+		if cmd, handled := m.switchWorkspace(key); handled {
+			return m, cmd
 		}
 		if key == "U" && !m.help && m.availableUpdate != "" {
 			return m, m.openSelfUpdate()
@@ -752,7 +763,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.focus = (m.focus + 2) % 3
 		case "esc":
 			m.focus = 0
-		case "up", "k", "down", "j", "pgup", "pgdown":
+		case "up", "down", "pgup", "pgdown":
 			delta := scrollDelta(key, ui.PageRows(m.height, m.focus, m.selected != ""))
 			switch m.focus {
 			case 0:
@@ -782,9 +793,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func scrollDelta(key string, page int) int {
 	switch key {
-	case "up", "k":
+	case "up":
 		return -1
-	case "down", "j":
+	case "down":
 		return 1
 	case "pgup":
 		return -page

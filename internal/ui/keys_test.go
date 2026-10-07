@@ -33,7 +33,7 @@ func TestKeyPanelLayoutAndPendingDetail(t *testing.T) {
 	}
 	v.Width, v.Height, v.Focus, v.Help = 110, 28, 1, false
 	text := ansi.Strip(RenderKeys(v))
-	for _, want := range []string{"Fingerprint: ab:cd", "Announced: Unknown", "Approx. key-file modified: Unknown", "a accept"} {
+	for _, want := range []string{"Fingerprint: ab:cd", "Announced: Unknown", "Approx. key-file modified: Unknown", "A accept"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("missing %q: %s", want, text)
 		}

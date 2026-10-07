@@ -31,11 +31,11 @@ func TestNarrowFleetKeepsSelectedRowVisible(t *testing.T) {
 
 func TestFailureAndLoadingKeepViewport(t *testing.T) {
 	data := ViewData{Width: 80, Height: 10, Focus: 0, Inventory: Source{Busy: true}}
-	for _, want := range []string{"Loading accepted keys", "Keys: denied", "No accepted keys · 6 Keys"} {
+	for _, want := range []string{"Loading accepted keys", "Keys: denied", "No accepted keys · k Keys"} {
 		switch want {
 		case "Keys: denied":
 			data.Inventory = Source{Err: errors.New("denied")}
-		case "No accepted keys · 6 Keys":
+		case "No accepted keys · k Keys":
 			data.Inventory = Source{At: time.Now()}
 		}
 		view := ansi.Strip(Render(data))
@@ -205,7 +205,7 @@ func TestUpdateNoticeIsCompactAndHiddenWhileSearching(t *testing.T) {
 	data := ViewData{Width: 200, Height: 20, RunningVersion: "v1.2.3", AvailableUpdate: "v1.2.4"}
 	view := ansi.Strip(Render(data))
 	lines := strings.Split(view, "\n")
-	if !strings.Contains(lines[1], "v1.2.4 available") || !strings.Contains(lines[1], "U: update") {
+	if !strings.Contains(lines[2], "v1.2.4 available") || !strings.Contains(lines[2], "U: update") {
 		t.Fatalf("update notice missing from its own header row:\n%s", view)
 	}
 	if strings.Contains(lines[len(lines)-1], "warning") {

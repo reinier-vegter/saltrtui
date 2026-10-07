@@ -94,10 +94,7 @@ func RenderConsole(v ConsoleViewData) string {
 	if cwd == "" {
 		cwd = "cwd unknown"
 	}
-	frame := []string{modeBar(w, "Fleet", v.Context, "Console · "+v.ID)}
-	if h >= 4 {
-		frame = append(frame, muted.Render(strings.Repeat("─", w)))
-	}
+	frame := modeFrame(w, h, "Fleet", v.Context, "Console · "+v.ID)
 	bodyHeight := h - len(frame) - 1
 	if bodyHeight > 0 {
 		input := v.Input

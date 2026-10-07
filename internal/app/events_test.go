@@ -42,7 +42,7 @@ func TestEventSubscriptionInspectionAndLifecycle(t *testing.T) {
 	if len(m.event.buffer.Records) != 1 || m.event.selected != 0 || wait == nil || m.activeView != 0 {
 		t.Fatal("first event was not captured in Fleet or next read not scheduled")
 	}
-	next, navigation := m.Update(tea.KeyPressMsg{Code: '4'})
+	next, navigation := m.Update(tea.KeyPressMsg{Code: 'e'})
 	m = next.(Model)
 	if m.activeView != 4 || navigation != nil || len(m.event.buffer.Records) != 1 {
 		t.Fatal("opening Events restarted the listener or cleared history")
@@ -70,7 +70,7 @@ func TestEventSubscriptionInspectionAndLifecycle(t *testing.T) {
 	if len(m.event.buffer.Records) != 1 {
 		t.Fatal("event from inactive view was not buffered")
 	}
-	m = press(m, '4')
+	m = press(m, 'e')
 	if len(m.event.buffer.Records) != 1 || m.event.buffer.Records[0].Tag != "salt/minion/node/start" {
 		t.Fatal("reopening Events lost background events")
 	}
@@ -121,7 +121,7 @@ func TestEventsStartWhileJobsOpenAndSurviveViewSwitches(t *testing.T) {
 	stream := make(chan events.Update, 2)
 	m := NewWithEvents(fakeGateway{}, nil, nil, fakeEventGateway{stream}, "master-a", true)
 	start := m.eventStartCmd()
-	m = press(m, '2')
+	m = press(m, 'j')
 	if m.activeView != 1 {
 		t.Fatal("Jobs did not open")
 	}
@@ -136,15 +136,15 @@ func TestEventsStartWhileJobsOpenAndSurviveViewSwitches(t *testing.T) {
 	if len(m.event.buffer.Records) != 1 || wait == nil {
 		t.Fatal("Events did not continue capturing while Jobs was open")
 	}
-	m = press(m, '4')
-	m = press(m, '6')
+	m = press(m, 'e')
+	m = press(m, 'k')
 	m = update(m, eventNext{context: m.context, request: m.eventGeneration, ok: true,
 		update: events.Update{Record: events.Record{Tag: "salt/minion/node/start", Data: json.RawMessage(`{}`)}}})
 	if len(m.event.buffer.Records) != 2 || m.activeView != 6 {
 		t.Fatal("switching to Keys interrupted the event buffer")
 	}
-	m = press(m, '1')
-	m = press(m, '4')
+	m = press(m, 'f')
+	m = press(m, 'e')
 	if len(m.event.buffer.Records) != 2 || m.event.cancel == nil {
 		t.Fatal("reopening Events lost history or listener")
 	}
