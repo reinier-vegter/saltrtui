@@ -77,12 +77,12 @@ func RenderConsole(v ConsoleViewData) string {
 	if w == 0 || h == 0 {
 		return ""
 	}
-	hints := []hint{{"enter", "run"}, {"↑↓", "history"}, {"ctrl+r", "search"}, {"pgup/down", "transcript"}, {"esc", "Fleet"}, {"ctrl+c", "quit"}}
+	hints := []hint{{"enter", "run"}, {"↑↓", "history"}, {"ctrl+r", "search"}, {"pgup/down", "transcript"}, {"esc", "Fleet"}, {"ctrl+c", "clear draft"}}
 	notice := ""
 	if v.Searching {
-		hints, notice = []hint{{"ctrl+r", "older"}, {"enter", "run match"}, {"esc", "restore draft"}}, "Reverse search"
+		hints, notice = []hint{{"ctrl+r", "older"}, {"enter", "run match"}, {"esc", "restore draft"}, {"ctrl+c", "clear draft"}}, "Reverse search"
 	} else if v.Busy {
-		hints, notice = []hint{{"esc", "Fleet"}}, "Waiting for Salt return; outcome unknown until reply"
+		hints, notice = []hint{{"esc", "Fleet"}, {"ctrl+c", "clear draft"}}, "Waiting for Salt return; outcome unknown until reply"
 	}
 	if h == 1 {
 		return actionBar(w, notice, false, hints...)

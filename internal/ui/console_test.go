@@ -50,3 +50,28 @@ func TestConsoleRecalledHistoryKeepsInputStylingIntact(t *testing.T) {
 		}
 	}
 }
+
+func TestConsoleClearDraftHintsAndFit(t *testing.T) {
+	for _, mode := range []string{"normal", "search", "busy"} {
+		for _, size := range [][2]int{{160, 25}, {72, 12}, {26, 6}, {8, 2}} {
+			v := ConsoleViewData{Width: size[0], Height: size[1], ID: "web-01", Searching: mode == "search", Busy: mode == "busy"}
+			view := RenderConsole(v)
+			plain := ansi.Strip(view)
+			if strings.Contains(plain, "quit") {
+				t.Fatalf("%s still advertises console quit: %q", mode, plain)
+			}
+			if v.Width == 160 && (!strings.Contains(plain, "ctrl+c") || !strings.Contains(plain, "clear draft")) {
+				t.Fatalf("%s missing clear-draft hint: %q", mode, plain)
+			}
+			lines := strings.Split(view, "\n")
+			if len(lines) != v.Height {
+				t.Fatalf("%s: wrong height", mode)
+			}
+			for _, line := range lines {
+				if ansi.StringWidth(line) != v.Width {
+					t.Fatalf("%s: wrong width: %q", mode, line)
+				}
+			}
+		}
+	}
+}

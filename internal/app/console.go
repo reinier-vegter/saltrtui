@@ -236,6 +236,15 @@ func (m Model) updateConsole(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
 		key := keyMsg.String()
+		if key == "ctrl+c" {
+			// Cancel local editing only; a pending Salt command continues.
+			state.input.SetValue("")
+			state.reverse.SetValue("")
+			state.reverse.Blur()
+			state.searchDraft, state.searching, state.match = "", false, -1
+			state.history.ResetNavigation()
+			return m, state.input.Focus()
+		}
 		if state.searching {
 			switch key {
 			case "esc":

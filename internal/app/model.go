@@ -673,6 +673,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.activeView == 8 {
 			return m.updateSelfUpdate(msg)
 		}
+		if key == "ctrl+c" && m.activeView == 2 && !m.graph.open {
+			return m.updateConsole(msg)
+		}
 		if key == "ctrl+c" {
 			m.stopEvents()
 			m.stopGraph()
