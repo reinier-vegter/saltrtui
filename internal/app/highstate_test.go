@@ -4,13 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+	"saltrtui/internal/fleet"
 	"saltrtui/internal/highstate"
+	"saltrtui/internal/ui"
 )
 
 type fakeHighstate struct {
@@ -26,7 +29,7 @@ func TestHighstateApplyRechecksTerminalFit(t *testing.T) {
 	model, preview := m.Update(tea.KeyPressMsg{Code: 'p'})
 	m = update(model.(Model), preview())
 	m = press(m, 'a')
-	for _, size := range []tea.WindowSizeMsg{{Width: 80, Height: 8}, {Width: 20, Height: 30}} {
+	for _, size := range []tea.WindowSizeMsg{{Width: 80, Height: 8}, {Width: 10, Height: 30}} {
 		m = update(m, size)
 		model, apply := m.Update(tea.KeyPressMsg{Code: 'y'})
 		m = model.(Model)
@@ -170,6 +173,9 @@ func TestHighstateStaleResultsSelectionAndUnknownOutcome(t *testing.T) {
 	if m.highstate.preview.At.IsZero() {
 		t.Fatal("expected preview fixture was ignored")
 	}
+	if !strings.Contains(m.highstate.status, "1 failed states") || !strings.Contains(ansi.Strip(m.View().Content), "1 failed states") {
+		t.Fatal("failed preview status omitted its count from the Actions box")
+	}
 	m = press(m, 'a')
 	if m.highstate.confirm {
 		t.Fatal("failed preview enabled Apply")
@@ -185,6 +191,35 @@ func TestHighstateStaleResultsSelectionAndUnknownOutcome(t *testing.T) {
 		t.Fatal("timed out apply was reported as success or automatically retryable")
 	}
 	m.Close()
+}
+
+func TestHighstateViewportClampsWhenActionsLayoutFallsBack(t *testing.T) {
+	m := highstateModel(&fakeHighstate{})
+	defer m.Close()
+	m = press(m, 'h')
+	m.width, m.height = 100, 24
+	steps := make([]highstate.Step, 50)
+	for i := range steps {
+		steps[i] = highstate.Step{ID: fmt.Sprintf("state-%02d", i), Changes: json.RawMessage(`{}`)}
+	}
+	m.highstate.preview = fleet.Observation[highstate.Report]{At: time.Now(), Value: highstate.Report{Steps: steps, Proposed: len(steps)}}
+	m.highstate.status = ""
+	model, _ := m.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+	m = model.(Model)
+	if ui.HighstateScrollLimit(m.highstateViewData()) == 0 {
+		t.Fatal("fixture did not create a scrollable report")
+	}
+	m.highstate.offset = 999
+	m.highstate.status = strings.Repeat("long status reason ", 200)
+	last := ansi.Strip(strings.Split(m.View().Content, "\n")[m.height-1])
+	if !strings.Contains(last, "│") || strings.Contains(last, "╰") {
+		t.Fatal("long reason should exercise one-row fallback")
+	}
+	model, _ = m.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+	m = model.(Model)
+	if m.highstate.offset > ui.HighstateScrollLimit(m.highstateViewData()) {
+		t.Fatalf("Highstate offset was not clamped after box-height change: %d > %d", m.highstate.offset, ui.HighstateScrollLimit(m.highstateViewData()))
+	}
 }
 
 func TestHighstateReviewBoundsSensitiveFields(t *testing.T) {

@@ -31,11 +31,11 @@ func TestNarrowFleetKeepsSelectedRowVisible(t *testing.T) {
 
 func TestFailureAndLoadingKeepViewport(t *testing.T) {
 	data := ViewData{Width: 80, Height: 10, Focus: 0, Inventory: Source{Busy: true}}
-	for _, want := range []string{"Loading accepted keys", "Keys: denied", "No accepted keys · k Keys"} {
+	for _, want := range []string{"Loading accepted keys", "Keys: denied", "No accepted keys"} {
 		switch want {
 		case "Keys: denied":
 			data.Inventory = Source{Err: errors.New("denied")}
-		case "No accepted keys · k Keys":
+		case "No accepted keys":
 			data.Inventory = Source{At: time.Now()}
 		}
 		view := ansi.Strip(Render(data))
@@ -153,8 +153,13 @@ func TestDetailsSearchMatchesKeysNestedValuesAndShowsSummary(t *testing.T) {
 	if content = strings.Join(detailLines(data, 36), "\n"); !strings.Contains(content, "No grains match") || !strings.Contains(content, "Hostname: node.example.org") {
 		t.Fatalf("no-match view lost context:\n%s", content)
 	}
-	if view := ansi.Strip(Render(data)); !strings.Contains(view, "no matches") {
-		t.Fatalf("no-match state must remain visible above long detail content:\n%s", view)
+	if strings.Contains(content, "clear it to show all") {
+		t.Fatal("grain no-match state contains a panel instruction")
+	}
+	data.DetailOffset = ScrollLimit(data, 2)
+	if view := ansi.Strip(Render(data)); !strings.Contains(view, "no matches") || !strings.Contains(view, "No grains match") ||
+		strings.Contains(view, "clear it to show all") || !strings.Contains(strings.Split(view, "\n")[len(strings.Split(view, "\n"))-1], "backspace: clear") {
+		t.Fatalf("no-match state/recovery is not separated between panel and footer:\n%s", view)
 	}
 	data.DetailQuery = "ubuntu"
 	if content = strings.Join(detailLines(data, 36), "\n"); !strings.Contains(content, "os: Ubuntu") || strings.Contains(content, "site: {") {

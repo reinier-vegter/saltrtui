@@ -39,11 +39,11 @@ func jobListLines(v JobsViewData, width, capacity int) ([]string, int, string) {
 		case v.List.Busy && v.List.At.IsZero():
 			text = "Loading recent jobs…"
 		case v.List.Err != nil && v.List.At.IsZero():
-			text = "Jobs unavailable; press r to retry"
+			text = "Jobs unavailable"
 		case v.List.At.IsZero():
 			text = "Jobs not loaded"
 		case v.Query != "":
-			text = "No matching jobs; clear the search"
+			text = "No matching jobs"
 		}
 		return []string{muted.Render(clip(text, width))}, 0, "Jobs 0/0"
 	}
@@ -74,7 +74,7 @@ func jobListLines(v JobsViewData, width, capacity int) ([]string, int, string) {
 
 func jobDetailLines(v JobsViewData, width int) []string {
 	if v.Selected == "" {
-		return styledLines([]string{"Select a cached job to inspect its returns."}, width)
+		return styledLines([]string{"No job selected."}, width)
 	}
 	lines := []string{"JID: " + v.Selected}
 	if v.Job.JID == v.Selected && !v.Detail.At.IsZero() {
@@ -127,7 +127,7 @@ func jobDetailLines(v JobsViewData, width int) []string {
 			lines = append(lines, "No cached minion returns or expected minions recorded.")
 		}
 	} else if v.Detail.At.IsZero() && !v.Detail.Busy && v.Detail.Err == nil {
-		lines = append(lines, "Press enter to load cached returns")
+		lines = append(lines, "Returns not loaded yet.")
 	}
 	lines = append(lines, sourceLine("Job detail", v.Detail))
 	return styledLines(lines, width)

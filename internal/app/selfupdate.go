@@ -157,12 +157,12 @@ func (m Model) updateSelfUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateIndex++
 		}
 	case "enter":
-		if m.width < 60 || m.height < 12 {
-			m.updateText = "Resize the terminal to review the full destination and cancellation controls before confirming."
-			return m, nil
-		}
 		if m.updateIndex == last {
 			m.activeView = 0
+			return m, nil
+		}
+		if !ui.UpdatePromptLayout(m.updateViewData()).FitsConfirmation {
+			m.updateText = "Resize the terminal to review the full destination and cancellation controls before confirming."
 			return m, nil
 		}
 		m.updateDestination = m.installation.Current
@@ -186,7 +186,7 @@ func (m Model) handleUpdateFetched(msg updateFetchedMsg) (tea.Model, tea.Cmd) {
 	}
 	if msg.err != nil {
 		m.updateCancel = nil
-		m.updatePhase, m.updateText = "failed", "Download failed: "+msg.err.Error()+"\nCheck connectivity and release availability, then return and try again."
+		m.updatePhase, m.updateText = "failed", "Download failed: "+msg.err.Error()
 		return m, nil
 	}
 	m.updatePhase, m.updateText = "verifying", "Verifying SHA-256 and extracting the release…"
@@ -203,7 +203,7 @@ func (m Model) handleUpdateDownloaded(msg updateDownloadedMsg) (tea.Model, tea.C
 	}
 	m.updateCancel = nil
 	if msg.err != nil {
-		m.updatePhase, m.updateText = "failed", "Verification failed: "+msg.err.Error()+"\nThe executable was not replaced. Return and retry with a fresh download."
+		m.updatePhase, m.updateText = "failed", "Verification failed: "+msg.err.Error()+"\nThe executable was not replaced."
 		return m, nil
 	}
 	m.updatePhase, m.updateText = "installing", "Installing verified release at "+m.updateDestination+"…"
@@ -234,7 +234,7 @@ func (m Model) handleUpdateInstalled(msg updateInstalledMsg) (tea.Model, tea.Cmd
 			m.availableUpdate = ""
 			return m, nil
 		}
-		m.updatePhase, m.updateText = "failed", "Installation failed or sudo cancelled: "+msg.err.Error()+"\nCheck destination permissions or retry the chosen installation method."
+		m.updatePhase, m.updateText = "failed", "Installation failed or sudo cancelled: "+msg.err.Error()+"\nThe previous executable remains available."
 		return m, nil
 	}
 	m.updatePhase = "done"

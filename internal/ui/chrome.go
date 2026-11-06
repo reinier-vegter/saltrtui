@@ -53,7 +53,7 @@ func renderModeLabel(name string, active bool) string {
 // modeFrame keeps the same order and position even in nested views. It measures
 // only unstyled text, then styles complete spans so ANSI sequences never affect
 // layout or truncate a box-drawing rail.
-func modeFrame(width, height int, mode, context, subview string) []string {
+func modeFrame(width, height int, mode, context, subview string, modal ...bool) []string {
 	if width <= 0 || height <= 0 {
 		return nil
 	}
@@ -82,7 +82,15 @@ func modeFrame(width, height int, mode, context, subview string) []string {
 		if entry.name == mode {
 			activeStart, activeEnd = start, ansi.StringWidth(plain)
 		}
-		parts = append(parts, renderModeLabel(name, entry.name == mode))
+		if len(modal) > 0 && modal[0] {
+			style := muted
+			if entry.name == mode {
+				style = activeMode
+			}
+			parts = append(parts, style.Render(" "+name+" "))
+		} else {
+			parts = append(parts, renderModeLabel(name, entry.name == mode))
+		}
 	}
 	body := strings.Join(parts, "  ")
 	if subview != "" && width-ansi.StringWidth(plain) >= ansi.StringWidth("  / "+subview) {

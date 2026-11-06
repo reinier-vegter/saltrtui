@@ -28,11 +28,10 @@ func targetBuilderLines(v TargetViewData, width int) []string {
 		"Matcher: " + mode,
 		"Example: web-01,web-02 (specific)  or  web-* (pattern)",
 		"Target: " + ansi.Strip(v.Input),
-		"Ctrl+T matcher · Ctrl+P preview · Ctrl+S save · Ctrl+N results · Esc close",
-		"Suggestions from accepted keys (Tab completes an ID):",
+		"Accepted-key suggestions:",
 	}
 	if len(v.Suggestions) == 0 {
-		lines = append(lines, "  Type an ID prefix for suggestions")
+		lines = append(lines, "  No suggestions for this prefix")
 	}
 	for i, suggestion := range v.Suggestions {
 		marker := "  "
@@ -55,16 +54,16 @@ func targetBuilderLines(v TargetViewData, width int) []string {
 		lines = append(lines, "Cannot preview: "+v.Error)
 	}
 	if v.Stale && !v.Preview.At.IsZero() {
-		lines = append(lines, "Draft changed; preview again before saving")
+		lines = append(lines, "Preview is stale because the target draft changed")
 	}
 	if !v.Preview.At.IsZero() {
 		lines = append(lines, "Effective "+v.Mode+": "+v.Expression,
 			fmt.Sprintf("%d accepted-key matches · %s", len(v.IDs), stamp(v.Preview)))
 		if len(v.IDs) == 0 {
-			lines = append(lines, "No accepted minions match; edit the target and preview again")
+			lines = append(lines, "No accepted minions match this preview")
 		}
 		if len(v.IDs) >= 10 {
-			lines = append(lines, "Broad scope: review every matched ID before saving")
+			lines = append(lines, fmt.Sprintf("Broad scope: %d accepted-key matches", len(v.IDs)))
 		}
 		lines = append(lines, "Presence is separate from targeting; a match may not respond.")
 		for i, id := range v.IDs {
@@ -82,7 +81,7 @@ func targetBuilderLines(v TargetViewData, width int) []string {
 			lines = append(lines, marker+id+" · "+status)
 		}
 	} else if !v.Busy && v.Error == "" {
-		lines = append(lines, "Press Ctrl+P to preview before saving")
+		lines = append(lines, "No current target preview is available.")
 	}
 	if v.Notice != "" {
 		lines = append(lines, "", v.Notice)

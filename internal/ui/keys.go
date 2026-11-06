@@ -18,7 +18,9 @@ type KeysViewData struct {
 	Width, Height, Focus, Offset, DetailOffset, HelpOffset int
 	Context, Query, Search, Fingerprint, Confirm, Status   string
 	Searching, Help, Busy, Ambiguous                       bool
+	BackendAvailable                                       bool
 	Selected                                               KeyRow
+	ConfirmedKey                                           KeyRow
 	Rows                                                   []KeyRow
 	List, Detail                                           Source
 	FileTime                                               time.Time
@@ -31,11 +33,11 @@ func keyListLines(v KeysViewData, width, capacity int) ([]string, int, string) {
 		case v.List.Busy && v.List.At.IsZero():
 			text = "Loading master keys…"
 		case v.List.Err != nil && v.List.At.IsZero():
-			text = "Keys unavailable; press r to retry"
+			text = "Keys unavailable"
 		case v.List.At.IsZero():
 			text = "Keys not loaded"
 		case v.Query != "":
-			text = "No matching keys; clear the search"
+			text = "No matching keys"
 		}
 		return []string{muted.Render(clip(text, width))}, 0, "Keys 0/0"
 	}
@@ -66,12 +68,12 @@ func keyListLines(v KeysViewData, width, capacity int) ([]string, int, string) {
 
 func keyDetailLines(v KeysViewData, width int) []string {
 	if v.Selected.ID == "" {
-		return styledLines([]string{"Select a key to inspect its details."}, width)
+		return styledLines([]string{"No key selected."}, width)
 	}
 	lines := []string{"ID: " + v.Selected.ID, "State: " + v.Selected.State,
 		"Inventory: " + sourceLine("Master keys", v.List), ""}
 	if v.Fingerprint == "" {
-		lines = append(lines, "Fingerprint: Unknown (press enter to inspect)")
+		lines = append(lines, "Fingerprint: not read")
 	} else {
 		lines = append(lines, "Fingerprint: "+v.Fingerprint)
 	}
@@ -86,23 +88,111 @@ func keyDetailLines(v KeysViewData, width int) []string {
 	}
 	lines = append(lines, sourceLine("Fingerprint read", v.Detail), "")
 	if v.Ambiguous {
-		lines = append(lines, "This ID occurs in multiple key states; actions disabled.")
+		lines = append(lines, "This ID occurs in multiple key states.")
 	}
 	switch v.Selected.State {
 	case "pending":
-		lines = append(lines, "A accept · b block (reject)")
+		lines = append(lines, "Pending: awaiting a decision on the master.")
 	case "accepted":
-		lines = append(lines, "d deny/revoke (delete accepted key)", "A revoked minion may announce again.")
+		lines = append(lines, "Accepted: this minion is authorized on the master.")
 	case "rejected":
-		lines = append(lines, "Blocked: explicitly rejected on master.")
+		lines = append(lines, "Rejected: explicitly blocked on the master.")
 	case "denied":
-		lines = append(lines, "Denied automatically by Salt (e.g. duplicate ID).")
-	}
-	if v.Confirm != "" {
-		lines = append(lines, "", "Confirm "+v.Confirm+" key "+v.Selected.ID+" ("+v.Selected.State+")?",
-			"y confirm · n/esc cancel", "Rechecks state before sending the action.")
+		lines = append(lines, "Denied automatically by Salt (e.g. duplicate ID); not a revoke.")
 	}
 	return styledLines(lines, width)
+}
+
+func keysActions(v KeysViewData) ActionBoxSpec {
+	spec := ActionBoxSpec{}
+	if v.Selected.ID != "" {
+		spec.Scope = v.Selected.ID + " (" + v.Selected.State + ")"
+	}
+	switch {
+	case v.Help:
+		spec.Nav = []hint{{"↑↓", "scroll help"}, {"esc/?", "return"}, {"ctrl+c", "quit"}}
+		return spec
+	case v.Searching:
+		spec.Reason = "Filtering keys"
+		spec.Nav = []hint{{"enter/esc", "close search"}, {"ctrl+c", "quit"}}
+		return spec
+	}
+
+	switch {
+	case v.List.Err != nil:
+		spec.Reason, spec.Alert = "Keys unavailable: "+v.List.Err.Error(), true
+		if v.BackendAvailable {
+			spec.Primary = []hint{{"r", "retry"}}
+		}
+	case v.Busy || v.List.Busy:
+		spec.Reason = "Key action in progress; wait for refresh"
+	case v.Status != "":
+		spec.Reason = v.Status
+		spec.Alert = !strings.HasSuffix(v.Status, "verified in refreshed keys")
+	case v.Ambiguous:
+		spec.Reason, spec.Alert = "Key actions are disabled: this ID occurs in multiple key states", true
+	case v.Selected.State == "rejected" || v.Selected.State == "denied":
+		spec.Reason = fmt.Sprintf("No key action is available for a %s key", v.Selected.State)
+	}
+	if v.BackendAvailable && v.List.Err == nil && !v.Busy && !v.List.Busy && !v.Ambiguous {
+		switch v.Selected.State {
+		case "pending":
+			spec.Primary = []hint{{"A", "accept key"}, {"b", "block key"}}
+		case "accepted":
+			spec.Primary = []hint{{"d", "deny/revoke key"}}
+		}
+	}
+	if v.BackendAvailable && v.Selected.ID != "" {
+		spec.Nav = append(spec.Nav, hint{"enter", "inspect fingerprint"})
+	}
+	if v.Focus == 0 {
+		spec.Nav = append(spec.Nav, hint{"/", "search"})
+	}
+	if v.BackendAvailable && v.List.Err == nil && !v.Busy && !v.List.Busy {
+		spec.Nav = append(spec.Nav, hint{"r", "refresh"})
+	}
+	spec.Nav = append(spec.Nav, hint{"?", "help"}, hint{"q", "quit"})
+	return spec
+}
+
+func keysBottomLayout(v KeysViewData) PromptLayout {
+	if v.Confirm != "" {
+		return KeysPromptLayout(v)
+	}
+	w, h := max(0, v.Width), max(0, v.Height)
+	headerRows := 0
+	if h > 1 {
+		headerRows = len(modeFrame(w, h, "Keys", v.Context, ""))
+	}
+	return LayoutActions(keysActions(v), w, h, headerRows)
+}
+
+func KeysListRows(v KeysViewData) int {
+	return max(1, keysBottomLayout(v).BodyHeight-4)
+}
+
+func KeysPageRows(v KeysViewData) int {
+	return max(1, keysBottomLayout(v).BodyHeight-3)
+}
+
+func KeysPrompt(v KeysViewData) PromptSpec {
+	key := v.ConfirmedKey
+	consequence := "Trust this minion key on the master."
+	switch v.Confirm {
+	case "block":
+		consequence = "Reject this pending key on the master."
+	case "revoke":
+		consequence = "Delete this accepted key; the minion may announce again."
+	}
+	return PromptSpec{Title: "Confirm " + v.Confirm + " key", Facts: []string{
+		"Key: " + promptValue(key.ID), "State: " + promptValue(key.State), "Master config: " + promptValue(v.Context),
+	}, Consequence: consequence + " Rechecks state before sending the action.",
+		Controls: []hint{{"y", "confirm"}, {"n/esc", "cancel"}}, Fallback: cancelPromptFallback}
+}
+
+func KeysPromptLayout(v KeysViewData) PromptLayout {
+	return LayoutPrompt(KeysPrompt(v), v.Width, v.Height,
+		len(decisionFrame(v.Width, v.Height, "Keys", v.Context, "")))
 }
 
 func keyHelp() []string {
@@ -125,7 +215,8 @@ func KeysScrollLimit(v KeysViewData, which int) int {
 	if which == 2 {
 		lines = styledLines(keyHelp(), v.Width-4)
 	}
-	return max(0, len(lines)-PageRows(v.Height, 1, false))
+	capacity := max(0, keysBottomLayout(v).BodyHeight-3)
+	return max(0, len(lines)-capacity)
 }
 
 func RenderKeys(v KeysViewData) string {
@@ -133,47 +224,15 @@ func RenderKeys(v KeysViewData) string {
 	if w == 0 || h == 0 {
 		return ""
 	}
-	hints := []hint{}
-	if !v.Busy && !v.List.Busy && v.List.Err == nil && !v.Ambiguous {
-		switch v.Selected.State {
-		case "pending":
-			hints = append(hints, hint{"A", "accept"}, hint{"b", "block"})
-		case "accepted":
-			hints = append(hints, hint{"d", "deny/revoke"})
-		}
-	}
-	if v.Focus == 0 {
-		hints = append(hints, hint{"/", "search"})
-	}
-	if v.Selected.ID != "" {
-		hints = append(hints, hint{"enter", "details"})
-	}
-	if !v.Busy && !v.List.Busy {
-		hints = append(hints, hint{"r", "refresh"})
-	}
-	hints = append(hints, hint{"?", "help"}, hint{"q", "quit"})
-	notice := ""
-	alert := false
-	switch {
-	case v.Help:
-		hints = []hint{{"↑↓", "scroll help"}, {"esc/?", "return"}, {"ctrl+c", "quit"}}
-	case v.Searching:
-		hints, notice = []hint{{"enter/esc", "close search"}, {"ctrl+c", "quit"}}, "Filter keys"
-	case v.Confirm != "":
-		hints, notice, alert = []hint{{"y", "confirm"}, {"n/esc", "cancel"}}, "Confirm "+v.Confirm+" "+v.Selected.ID+" ("+v.Selected.State+")?", true
-	case v.List.Err != nil:
-		hints, notice, alert = []hint{{"r", "retry"}, {"?", "help"}}, "Keys: "+v.List.Err.Error(), true
-	case v.Busy:
-		hints, notice = []hint{{"?", "help"}}, "Key action in progress; wait for refresh"
-	case v.Status != "":
-		hints, notice = []hint{{"r", "refresh"}, {"?", "help"}}, v.Status
-		alert = !strings.HasSuffix(v.Status, "verified in refreshed keys")
-	}
 	if h == 1 {
-		return actionBar(w, notice, alert, hints...)
+		return strings.Join(keysBottomLayout(v).Rows, "\n")
 	}
 	frame := modeFrame(w, h, "Keys", v.Context, "")
-	bodyHeight := h - len(frame) - 1
+	layout := keysBottomLayout(v)
+	bodyHeight, bottom := layout.BodyHeight, layout.Rows
+	if v.Confirm != "" {
+		frame = decisionFrame(w, h, "Keys", v.Context, "")
+	}
 	if bodyHeight > 0 {
 		var body string
 		if v.Help {
@@ -191,19 +250,24 @@ func RenderKeys(v KeysViewData) string {
 					searchStyle = accent
 				}
 				pinned = []string{searchStyle.Render(clip(ansi.Strip(v.Search), left-4))}
+			} else if bodyHeight == 3 && len(list) > 0 {
+				title = strings.TrimSpace(ansi.Strip(list[min(offset, len(list)-1)]))
+				if v.Searching {
+					title += " · " + ansi.Strip(v.Search)
+				}
 			} else if v.Searching {
 				title = ansi.Strip(v.Search)
 			}
-			body = panel(title, list, offset, left, bodyHeight, v.Focus == 0, pinned)
+			body = panel(title, list, offset, left, bodyHeight, v.Focus == 0 && v.Confirm == "", pinned)
 			if w >= 68 {
 				right := w - left - 2
-				body = lipgloss.JoinHorizontal(lipgloss.Top, body, "  ", panel("Key detail", keyDetailLines(v, right-4), v.DetailOffset, right, bodyHeight, v.Focus == 1, nil))
+				body = lipgloss.JoinHorizontal(lipgloss.Top, body, "  ", panel("Key detail", keyDetailLines(v, right-4), v.DetailOffset, right, bodyHeight, v.Focus == 1 && v.Confirm == "", nil))
 			} else if v.Focus == 1 {
-				body = panel("Key detail", keyDetailLines(v, w-4), v.DetailOffset, w, bodyHeight, true, nil)
+				body = panel("Key detail", keyDetailLines(v, w-4), v.DetailOffset, w, bodyHeight, v.Confirm == "", nil)
 			}
 		}
 		frame = append(frame, strings.Split(body, "\n")...)
 	}
-	frame = append(frame, actionBar(w, notice, alert, hints...))
+	frame = append(frame, bottom...)
 	return strings.Join(frame, "\n")
 }

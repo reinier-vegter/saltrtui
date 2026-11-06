@@ -24,6 +24,7 @@ type HighstateViewData struct {
 	ApplyReport           HighstateReport
 	Confirm, Busy, Help   bool
 	CanApply, Attempted   bool
+	CanPreview            bool
 	Expired               bool
 }
 
@@ -42,12 +43,6 @@ func highstateReportLines(title string, report HighstateReport) []string {
 }
 
 func highstateLines(v HighstateViewData, width int) []string {
-	if v.Confirm {
-		if !HighstateConfirmationFits(v) {
-			return styledLines([]string{"Resize to review Apply; n/esc cancels."}, width)
-		}
-		return highstateConfirmationLines(v, width)
-	}
 	lines := []string{
 		"Minion: " + v.ID,
 		"Master config: " + v.Context,
@@ -64,58 +59,123 @@ func highstateLines(v HighstateViewData, width int) []string {
 	}
 	lines = append(lines, sourceLine("Preview", v.Preview))
 	if v.Preview.Busy {
-		lines = append(lines, "Preview job running; wait for the minion return.")
+		lines = append(lines, "Preview running; awaiting the minion return.")
 	} else if v.Preview.At.IsZero() && v.Preview.Err == nil {
-		lines = append(lines, "Press p to preview the selected minion's highstate.")
+		lines = append(lines, "No preview has run for this minion.")
 	} else if v.Preview.Err != nil {
-		lines = append(lines, "Preview unavailable; Apply is disabled.")
+		lines = append(lines, "Preview unavailable.")
 	} else {
 		lines = append(lines, highstateReportLines("Preview results", v.PreviewReport)...)
-		if v.CanApply {
-			lines = append(lines, "", "Preview succeeded. Press a to review Apply.")
+		if v.Confirm {
+			// Approval and controls belong exclusively to the bottom box.
+		} else if v.CanApply {
+			lines = append(lines, "", "Preview succeeded: no failed states.")
 		} else if v.Expired {
-			lines = append(lines, "", "Preview expired; press p for a new review.")
+			lines = append(lines, "", "Preview expired.")
 		} else if v.Attempted {
-			lines = append(lines, "", "A new preview is needed before another Apply.")
+			lines = append(lines, "", "Apply already sent for this preview.")
 		} else {
-			lines = append(lines, "", "Apply disabled; review failed states or changed selection.")
+			lines = append(lines, "", "This preview cannot be applied.")
 		}
 	}
 	if v.Attempted {
 		lines = append(lines, "", sourceLine("Apply", v.Apply))
-		if v.Apply.Busy {
-			lines = append(lines, "Apply job dispatched; do not repeat it.")
-		} else if v.Apply.Err == nil && !v.Apply.At.IsZero() {
+		if !v.Apply.Busy && v.Apply.Err == nil && !v.Apply.At.IsZero() {
 			lines = append(lines, highstateReportLines("Apply results", v.ApplyReport)...)
 		}
-	}
-	if v.Status != "" {
-		lines = append(lines, "", "Status: "+v.Status)
 	}
 	return styledLines(lines, width)
 }
 
-func highstateConfirmationLines(v HighstateViewData, width int) []string {
-	return styledLines([]string{
-		"CONFIRM state.highstate APPLY on " + v.ID,
-		"Master config: " + v.Context,
-		"This can change the minion; the accepted key is rechecked first.",
-		"Press y to dispatch once, n/esc to cancel.",
-	}, width)
+func HighstatePrompt(v HighstateViewData) PromptSpec {
+	return PromptSpec{Title: "Confirm Apply · state.highstate", Facts: []string{
+		"Minion: " + promptValue(v.ID), "Master config: " + promptValue(v.Context), "Action: state.highstate test=False",
+	}, Consequence: "This can change the minion; the accepted key is rechecked first.",
+		Controls: []hint{{"y", "apply once"}, {"n/esc", "cancel"}}, Fallback: cancelPromptFallback}
+}
+
+func HighstatePromptLayout(v HighstateViewData) PromptLayout {
+	return LayoutPrompt(HighstatePrompt(v), v.Width, v.Height,
+		len(decisionFrame(v.Width, v.Height, "Fleet", v.Context, "Highstate · "+v.ID)))
 }
 
 // HighstateConfirmationFits is shared by rendering and dispatch. Confirmation
 // must expose the entire target/consequence and both intact footer controls.
 func HighstateConfirmationFits(v HighstateViewData) bool {
-	return v.Width >= len("y: apply once  n/esc: cancel")+3 && v.Height >= 7 &&
-		len(highstateConfirmationLines(v, v.Width-4)) <= v.Height-6
+	return HighstatePromptLayout(v).FitsConfirmation
+}
+
+func highstateBlockedReason(v HighstateViewData) string {
+	if v.Status != "" {
+		return v.Status
+	}
+	if v.Preview.Busy || (v.Preview.At.IsZero() && v.Preview.Err == nil) || v.CanApply {
+		return ""
+	}
+	switch {
+	case v.Preview.Err != nil:
+		return "Apply blocked: preview unavailable"
+	case v.Attempted:
+		return "Apply blocked: run a new preview before another Apply"
+	case v.Expired:
+		return "Apply blocked: preview expired; run a new preview"
+	case v.PreviewReport.Failed > 0:
+		return fmt.Sprintf("Apply blocked: preview reported %d failed states (see results above)", v.PreviewReport.Failed)
+	case len(v.PreviewReport.Steps) == 0:
+		return "Apply blocked: preview returned no state results"
+	default:
+		return "Apply blocked: selection changed or the key is no longer accepted"
+	}
+}
+
+func highstateActions(v HighstateViewData) ActionBoxSpec {
+	spec := ActionBoxSpec{Scope: v.ID}
+	spec.Reason = highstateBlockedReason(v)
+	status := strings.ToLower(v.Status)
+	spec.Alert = spec.Reason != "" && !v.Busy && (v.Preview.Err != nil || v.Apply.Err != nil || v.Expired ||
+		v.PreviewReport.Failed > 0 || v.ApplyReport.Failed > 0 ||
+		v.Status == "" && !v.CanApply && (!v.Preview.At.IsZero() || v.Preview.Err != nil) ||
+		strings.Contains(status, "unavailable") || strings.Contains(status, "failed") || strings.Contains(status, "expired") || strings.Contains(status, "unknown"))
+	if v.Help {
+		spec.Nav = []hint{{"↑↓", "scroll"}, {"?", "return"}, {"esc", "Fleet"}}
+		return spec
+	}
+	if v.Busy {
+		spec.Nav = []hint{{"↑↓", "scroll"}, {"esc", "wait for result"}}
+		return spec
+	}
+	if v.CanPreview {
+		spec.Primary = []hint{{"p", "preview"}}
+	}
+	if v.CanApply {
+		spec.Primary = append(spec.Primary, hint{"a", "review Apply"})
+	}
+	spec.Nav = []hint{{"↑↓", "scroll"}, {"esc", "Fleet"}, {"?", "help"}}
+	return spec
+}
+
+func highstateBottomLayout(v HighstateViewData) PromptLayout {
+	if v.Confirm {
+		return HighstatePromptLayout(v)
+	}
+	w, h := max(0, v.Width), max(0, v.Height)
+	headerRows := 0
+	if h > 1 {
+		headerRows = len(modeFrame(w, h, "Fleet", v.Context, "Highstate · "+v.ID))
+	}
+	return LayoutActions(highstateActions(v), w, h, headerRows)
+}
+
+func HighstatePageRows(v HighstateViewData) int {
+	return max(1, highstateBottomLayout(v).BodyHeight-3)
 }
 
 func HighstateScrollLimit(v HighstateViewData) int {
 	if v.Width < 6 || v.Height < 6 {
 		return 0
 	}
-	return max(0, len(highstateLines(v, v.Width-4))-PageRows(v.Height, 1, false))
+	capacity := max(0, highstateBottomLayout(v).BodyHeight-3)
+	return max(0, len(highstateLines(v, v.Width-4))-capacity)
 }
 
 func RenderHighstate(v HighstateViewData) string {
@@ -123,45 +183,27 @@ func RenderHighstate(v HighstateViewData) string {
 	if w == 0 || h == 0 {
 		return ""
 	}
-	hints := []hint{{"p", "preview"}, {"a", "review apply"}, {"↑↓", "scroll"}, {"esc", "Fleet"}, {"?", "help"}}
 	if v.Confirm {
-		hints = []hint{{"y", "apply once"}, {"n/esc", "cancel"}}
-		if !HighstateConfirmationFits(v) {
-			hints = []hint{{"n/esc", "cancel"}}
+		frame := decisionFrame(w, h, "Fleet", v.Context, "Highstate · "+v.ID)
+		layout := HighstatePromptLayout(v)
+		if layout.BodyHeight > 0 {
+			frame = append(frame, strings.Split(panel("Highstate · one minion", highstateLines(v, w-4), v.Offset, w, layout.BodyHeight, false, nil), "\n")...)
 		}
-	} else if v.Busy {
-		hints = []hint{{"↑↓", "scroll"}, {"esc", "wait for result"}}
-	} else if v.Help {
-		hints = []hint{{"↑↓", "scroll"}, {"?", "return"}, {"esc", "Fleet"}}
-	} else if !v.CanApply {
-		hints = []hint{{"p", "preview"}, {"↑↓", "scroll"}, {"esc", "Fleet"}, {"?", "help"}}
+		return strings.Join(append(frame, layout.Rows...), "\n")
 	}
-	notice := v.Status
-	if v.Confirm {
-		// Confirmation facts own the body; diagnostics cannot crowd its controls.
-		notice = ""
-		if !HighstateConfirmationFits(v) {
-			notice = "Resize to review Apply"
-		}
-	}
-	alert := notice != "" && !v.Busy
 	if h == 1 {
-		return actionBar(w, notice, alert, hints...)
+		return strings.Join(highstateBottomLayout(v).Rows, "\n")
 	}
 	frame := modeFrame(w, h, "Fleet", v.Context, "Highstate · "+v.ID)
-	if bodyHeight := h - len(frame) - 1; bodyHeight > 0 {
+	layout := highstateBottomLayout(v)
+	if bodyHeight := layout.BodyHeight; bodyHeight > 0 {
 		name := "Highstate · one minion"
-		if v.Confirm {
-			name = "Confirm Apply · " + v.ID
-		} else if v.Help {
+		if v.Help {
 			name = "Highstate help"
 		}
 		offset := v.Offset
-		if v.Confirm {
-			offset = 0
-		}
 		frame = append(frame, strings.Split(panel(name, highstateLines(v, max(0, w-4)), offset, w, bodyHeight, true, nil), "\n")...)
 	}
-	frame = append(frame, actionBar(w, notice, alert, hints...))
+	frame = append(frame, layout.Rows...)
 	return strings.Join(frame, "\n")
 }

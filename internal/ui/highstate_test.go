@@ -32,15 +32,15 @@ func TestHighstateViewFitsAndKeepsReviewVisible(t *testing.T) {
 	}
 	v.Width, v.Height, v.Confirm = 100, 18, true
 	text := ansi.Strip(RenderHighstate(v))
-	if !strings.Contains(text, "CONFIRM state.highstate APPLY on web-01") || !strings.Contains(text, "y: apply once") || !strings.Contains(text, "n/esc: cancel") {
+	if !strings.Contains(text, "Confirm Apply") || !strings.Contains(text, "Minion: web-01") || !strings.Contains(text, "y: apply once") || !strings.Contains(text, "n/esc: cancel") {
 		t.Fatalf("confirmation lost exact target or cancellation: %s", text)
 	}
 	v.Confirm = false
-	if text = ansi.Strip(RenderHighstate(v)); !strings.Contains(text, "proposed · pkg_|-baseline") || !strings.Contains(text, "a: review apply") {
+	if text = ansi.Strip(RenderHighstate(v)); !strings.Contains(text, "proposed · pkg_|-baseline") || !strings.Contains(text, "a: review Apply") {
 		t.Fatalf("review missing result or action: %s", text)
 	}
 	v.Offset = HighstateScrollLimit(v)
-	if text = ansi.Strip(RenderHighstate(v)); !strings.Contains(text, "Preview succeeded. Press a to review Apply") {
+	if text = ansi.Strip(RenderHighstate(v)); !strings.Contains(text, "Preview succeeded: no failed states.") {
 		t.Fatalf("last review line cannot be reached: %s", text)
 	}
 }
@@ -54,7 +54,7 @@ func TestHighstateConfirmationAlwaysShowsFactsOrBlocksApply(t *testing.T) {
 				if HighstateConfirmationFits(v) {
 					// Wrapped content may split words; inspect the actual full body
 					// capacity as well as the intact dispatch/cancel footer.
-					lines := highstateConfirmationLines(v, width-4)
+					lines := HighstatePromptLayout(v).Rows
 					for _, line := range lines {
 						if !strings.Contains(text, ansi.Strip(line)) {
 							t.Fatalf("%dx%d: hidden confirmation line %q", width, height, line)

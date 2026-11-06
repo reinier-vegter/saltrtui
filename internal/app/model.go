@@ -564,14 +564,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err == nil {
 			m.keys.Value, m.keys.At = fleet.SortUnique(msg.ids), msg.at
 			m.alignSelection()
-			if m.highstate != nil && m.activeView == 7 && m.highstate.id != m.selected {
-				m.highstate.confirm = false
-				m.highstate.status = "Fleet selection changed; return to Fleet and review the new minion"
-			}
 			if m.assignments != nil && m.activeView == 9 && m.assignments.observation.At.IsZero() && !m.assignments.observation.Busy {
 				return m, m.loadAssignments()
 			}
 		}
+		m.invalidateHighstateConfirmation()
 	case presenceLoaded:
 		if msg.context != m.context || msg.request != m.request {
 			return m, nil
@@ -622,9 +619,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.event.detailOffset = min(m.event.detailOffset, ui.EventsScrollLimit(m.eventsViewData(), 1))
 		m.event.helpOffset = min(m.event.helpOffset, ui.EventsScrollLimit(m.eventsViewData(), 2))
 		m.key.search.SetWidth(max(1, min(32, ui.TargetWidth(m.width)-4)))
-		m.key.offset = min(m.key.offset, max(0, len(m.visibleKeys())-ui.ListRows(m.height)))
-		m.key.detailOffset = min(m.key.detailOffset, ui.KeysScrollLimit(m.keysViewData(), 1))
-		m.key.helpOffset = min(m.key.helpOffset, ui.KeysScrollLimit(m.keysViewData(), 2))
+		m.clampKeyViewport()
 		if m.highstate != nil {
 			m.highstate.offset = min(m.highstate.offset, ui.HighstateScrollLimit(m.highstateViewData()))
 		}
@@ -634,6 +629,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.assignments.filter.SetWidth(max(1, min(32, ui.TargetWidth(m.width)-4)))
 		}
 	case tea.PasteMsg:
+		if m.activeView == 7 || m.activeView == 8 {
+			return m, nil
+		}
 		if m.graph.open {
 			return m, nil
 		}

@@ -52,7 +52,8 @@ func TestSharedNavigationAndActionFrame(t *testing.T) {
 							}
 							last = pos
 						}
-						if !strings.Contains(lines[0], "\x1b[") || !strings.Contains(ansi.Strip(lines[h-1]), "│") {
+						lastRow := ansi.Strip(lines[h-1])
+						if !strings.Contains(lines[0], "\x1b[") || (!strings.Contains(lastRow, "│") && !strings.Contains(lastRow, "╰")) {
 							t.Fatalf("unframed or unstyled chrome: %q / %q", header, ansi.Strip(lines[h-1]))
 						}
 						if h >= 4 && !strings.Contains(ansi.Strip(lines[1]), "━") {
@@ -74,8 +75,9 @@ func TestPresenceErrorKeepsModesAndRetry(t *testing.T) {
 		!strings.Contains(lines[len(lines)-1], "Presence: Salt emitted diagnostics") || strings.Contains(lines[len(lines)-1], "Presence: presence:") {
 		t.Fatalf("presence failure hid navigation or duplicated source: %q / %q", lines[0], lines[len(lines)-1])
 	}
-	if !strings.Contains(ansi.Strip(Render(ViewData{Width: 120, Height: 12, Inventory: Source{At: time.Now()}})), "No accepted keys · k Keys") {
-		t.Fatal("empty accepted inventory did not direct operator to Keys")
+	empty := ansi.Strip(Render(ViewData{Width: 120, Height: 12, Inventory: Source{At: time.Now()}}))
+	if !strings.Contains(empty, "No accepted keys; pending keys") || !strings.Contains(empty, "appear in Keys") {
+		t.Fatalf("empty accepted inventory did not direct operator to Keys: %s", empty)
 	}
 	v.Width = 36
 	footer := ansi.Strip(strings.Split(Render(v), "\n")[v.Height-1])
@@ -108,9 +110,10 @@ func TestModeFrameAlignsOneActiveRailAndNeverClipsTabs(t *testing.T) {
 }
 
 func TestKeyConfirmationRetainsActions(t *testing.T) {
-	v := KeysViewData{Width: 100, Height: 12, Confirm: "accept", Selected: KeyRow{ID: "pending-1", State: "pending"}}
+	v := KeysViewData{Width: 100, Height: 12, Confirm: "accept", ConfirmedKey: KeyRow{ID: "pending-1", State: "pending"}}
 	lines := strings.Split(ansi.Strip(RenderKeys(v)), "\n")
-	if !strings.Contains(lines[0], "Keys") || !strings.Contains(lines[len(lines)-1], "y: confirm") || !strings.Contains(lines[len(lines)-1], "n/esc: cancel") || !strings.Contains(lines[len(lines)-1], "pending-1") {
+	text := strings.Join(lines, "\n")
+	if !strings.Contains(lines[0], "Keys") || !strings.Contains(lines[len(lines)-1], "╰") || !strings.Contains(text, "y: confirm") || !strings.Contains(text, "n/esc: cancel") || !strings.Contains(text, "pending-1") {
 		t.Fatalf("confirmation chrome incomplete: %q / %q", lines[0], lines[len(lines)-1])
 	}
 }
@@ -140,12 +143,12 @@ func TestActionBarKeepsWholePairsAndSafeRoutes(t *testing.T) {
 func TestKeysOnlyAdvertisesAvailableMutations(t *testing.T) {
 	for _, state := range []string{"pending", "accepted", "rejected", "denied", ""} {
 		for _, blocked := range []bool{false, true} {
-			v := KeysViewData{Width: 160, Height: 12, Selected: KeyRow{ID: "key", State: state}, Ambiguous: blocked}
-			footer := ansi.Strip(strings.Split(RenderKeys(v), "\n")[v.Height-1])
-			if strings.Contains(footer, "A: accept") != (state == "pending" && !blocked) ||
-				strings.Contains(footer, "b: block") != (state == "pending" && !blocked) ||
-				strings.Contains(footer, "d: deny/revoke") != (state == "accepted" && !blocked) {
-				t.Fatalf("%s blocked=%v: %q", state, blocked, footer)
+			v := KeysViewData{Width: 160, Height: 12, BackendAvailable: true, Selected: KeyRow{ID: "key", State: state}, Ambiguous: blocked}
+			text := ansi.Strip(RenderKeys(v))
+			if strings.Contains(text, "A: accept key") != (state == "pending" && !blocked) ||
+				strings.Contains(text, "b: block key") != (state == "pending" && !blocked) ||
+				strings.Contains(text, "d: deny/revoke key") != (state == "accepted" && !blocked) {
+				t.Fatalf("%s blocked=%v: %q", state, blocked, text)
 			}
 		}
 	}

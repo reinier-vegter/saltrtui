@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -24,14 +25,22 @@ type highstateLoaded struct {
 }
 
 type highstateState struct {
-	context, id     string
-	request         int
-	preview         fleet.Observation[highstate.Report]
-	apply           fleet.Observation[highstate.Report]
-	busy, confirm   bool
-	attempted, help bool
-	status          string
-	offset          int
+	context, id                 string
+	request                     int
+	preview                     fleet.Observation[highstate.Report]
+	apply                       fleet.Observation[highstate.Report]
+	busy, confirm               bool
+	attempted, help             bool
+	status                      string
+	offset                      int
+	confirmOffset, confirmation int
+	expiryCancel                context.CancelFunc
+}
+
+type highstateApprovalExpired struct {
+	context, id           string
+	request, confirmation int
+	previewAt             time.Time
 }
 
 const highstatePreviewLifetime = 15 * time.Minute
@@ -48,6 +57,7 @@ func (m *Model) openHighstate() tea.Cmd {
 		return nil
 	}
 	m.highstateRequest++
+	m.closeHighstateConfirmation("Previous highstate review closed")
 	m.highstate = &highstateState{context: m.context, id: m.selected, request: m.highstateRequest}
 	m.activeView = 7
 	if m.highstateBackend == nil {
@@ -57,16 +67,79 @@ func (m *Model) openHighstate() tea.Cmd {
 }
 
 func (m *Model) canApplyHighstate() bool {
+	return m.highstateApprovalIssue() == ""
+}
+
+func (m *Model) highstateApprovalIssue() string {
 	s := m.highstate
-	if s == nil || m.highstateBackend == nil || s.context != m.context || s.id != m.selected || s.busy || s.attempted || s.preview.At.IsZero() || s.preview.Err != nil || s.preview.Value.Failed > 0 || len(s.preview.Value.Steps) == 0 || time.Since(s.preview.At) > highstatePreviewLifetime {
-		return false
+	switch {
+	case s == nil || m.highstateBackend == nil:
+		return "Highstate gateway unavailable"
+	case s.context != m.context:
+		return "Master context changed; return to Fleet and review again"
+	case s.id != m.selected:
+		return "Fleet selection changed; return to Fleet and review the new minion"
+	case s.busy || s.attempted:
+		return "An operation started; a new preview is required before another Apply"
+	case s.preview.At.IsZero() || s.preview.Err != nil:
+		return "Preview unavailable; press p for a new review"
+	case s.preview.Value.Failed > 0 || len(s.preview.Value.Steps) == 0:
+		return "Preview failed or empty; inspect results before a new preview"
+	case time.Since(s.preview.At) >= highstatePreviewLifetime:
+		return "Preview expired; press p for a new review"
+	case m.keys.Err != nil:
+		return "Accepted-key inventory unavailable; return to Fleet and refresh"
 	}
 	for _, id := range m.keys.Value {
-		if id == s.id && m.keys.Err == nil {
-			return true
+		if id == s.id {
+			return ""
 		}
 	}
-	return false
+	return "Minion no longer accepted; return to Fleet and refresh"
+}
+
+func (m *Model) closeHighstateConfirmation(status string) {
+	s := m.highstate
+	if s == nil || !s.confirm {
+		return
+	}
+	if s.expiryCancel != nil {
+		s.expiryCancel()
+		s.expiryCancel = nil
+	}
+	s.confirm, s.status = false, status
+	s.offset = max(0, min(s.confirmOffset, ui.HighstateScrollLimit(m.highstateViewData())))
+}
+
+func (m *Model) invalidateHighstateConfirmation() {
+	if m.highstate != nil && m.highstate.confirm {
+		if reason := m.highstateApprovalIssue(); reason != "" {
+			m.closeHighstateConfirmation(reason + "; confirmation canceled. No Apply sent.")
+		}
+	}
+}
+
+func (m *Model) openHighstateConfirmation() tea.Cmd {
+	s := m.highstate
+	if !m.canApplyHighstate() || s.confirm {
+		return nil
+	}
+	s.confirmOffset, s.confirm, s.status = s.offset, true, ""
+	s.confirmation++
+	ctx, cancel := context.WithCancel(m.workCtx)
+	s.expiryCancel = cancel
+	msg := highstateApprovalExpired{s.context, s.id, s.request, s.confirmation, s.preview.At}
+	deadline := s.preview.At.Add(highstatePreviewLifetime)
+	return func() tea.Msg {
+		timer := time.NewTimer(max(0, time.Until(deadline)))
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-timer.C:
+			return msg
+		}
+	}
 }
 
 func (m *Model) previewHighstate() tea.Cmd {
@@ -74,6 +147,7 @@ func (m *Model) previewHighstate() tea.Cmd {
 	if s == nil || s.busy || m.highstateBackend == nil || s.context != m.context || s.id != m.selected {
 		return nil
 	}
+	m.closeHighstateConfirmation("New preview requested")
 	m.highstateRequest++
 	s.request = m.highstateRequest
 	s.preview, s.apply = fleet.Observation[highstate.Report]{Busy: true}, fleet.Observation[highstate.Report]{}
@@ -89,7 +163,11 @@ func (m *Model) previewHighstate() tea.Cmd {
 
 func (m *Model) applyHighstate() tea.Cmd {
 	s := m.highstate
-	if !m.canApplyHighstate() || !s.confirm || m.highstateBackend == nil {
+	if s == nil || !s.confirm {
+		return nil
+	}
+	m.invalidateHighstateConfirmation()
+	if !s.confirm {
 		return nil
 	}
 	if !ui.HighstateConfirmationFits(m.highstateViewData()) {
@@ -98,6 +176,10 @@ func (m *Model) applyHighstate() tea.Cmd {
 	}
 	m.highstateRequest++
 	s.request = m.highstateRequest
+	if s.expiryCancel != nil {
+		s.expiryCancel()
+		s.expiryCancel = nil
+	}
 	s.busy, s.confirm, s.attempted = true, false, true
 	s.apply = fleet.Observation[highstate.Report]{Busy: true}
 	s.status = "Rechecking accepted key before dispatch…"
@@ -111,6 +193,13 @@ func (m *Model) applyHighstate() tea.Cmd {
 }
 
 func (m Model) highstateResult(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
+	if expired, ok := msg.(highstateApprovalExpired); ok {
+		s := m.highstate
+		if s != nil && s.confirm && expired.context == m.context && expired.context == s.context && expired.id == s.id && expired.request == s.request && expired.confirmation == s.confirmation && expired.previewAt.Equal(s.preview.At) {
+			m.invalidateHighstateConfirmation()
+		}
+		return m, nil, true
+	}
 	result, ok := msg.(highstateLoaded)
 	if !ok {
 		return m, nil, false
@@ -129,7 +218,7 @@ func (m Model) highstateResult(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			if len(result.report.Steps) == 0 {
 				s.status = "Preview returned no state results; Apply disabled"
 			} else if result.report.Failed > 0 {
-				s.status = "Preview reported failed states; Apply disabled"
+				s.status = fmt.Sprintf("Preview reported %d failed states; Apply disabled", result.report.Failed)
 			} else {
 				s.status = "Preview returned; inspect proposed changes before Apply"
 			}
@@ -193,6 +282,9 @@ func (m Model) highstateViewData() ui.HighstateViewData {
 		return v
 	}
 	v.ID, v.Offset, v.Confirm, v.Busy, v.Attempted, v.Help, v.Status = s.id, s.offset, s.confirm, s.busy, s.attempted, s.help, s.status
+	if s.confirm {
+		v.Context = s.context
+	}
 	v.Presence = "unknown"
 	if !m.presence.At.IsZero() && m.presence.Err == nil && !m.presence.Busy {
 		v.Presence = "not observed"
@@ -206,8 +298,9 @@ func (m Model) highstateViewData() ui.HighstateViewData {
 	v.Preview = ui.Source{At: s.preview.At, Err: s.preview.Err, Busy: s.preview.Busy}
 	v.Apply = ui.Source{At: s.apply.At, Err: s.apply.Err, Busy: s.apply.Busy}
 	v.PreviewReport, v.ApplyReport = stateViewReport(s.preview.Value), stateViewReport(s.apply.Value)
+	v.CanPreview = m.highstateBackend != nil && !s.busy && s.context == m.context && s.id == m.selected
 	v.CanApply = m.canApplyHighstate()
-	v.Expired = !s.preview.At.IsZero() && time.Since(s.preview.At) > highstatePreviewLifetime
+	v.Expired = !s.preview.At.IsZero() && time.Since(s.preview.At) >= highstatePreviewLifetime
 	return v
 }
 
@@ -227,8 +320,7 @@ func (m Model) updateHighstate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "y":
 			return m, m.applyHighstate()
 		case "n", "esc":
-			s.confirm = false
-			s.status = "Apply canceled; no job sent"
+			m.closeHighstateConfirmation("Apply canceled; no job sent")
 		}
 		return m, nil
 	}
@@ -258,11 +350,9 @@ func (m Model) updateHighstate(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case "p":
 		return m, m.previewHighstate()
 	case "a":
-		if m.canApplyHighstate() {
-			s.confirm, s.status, s.offset = true, "", 0
-		}
+		return m, m.openHighstateConfirmation()
 	case "up", "down", "pgup", "pgdown":
-		s.offset = max(0, min(s.offset+scrollDelta(key, ui.PageRows(m.height, 1, false)), ui.HighstateScrollLimit(m.highstateViewData())))
+		s.offset = max(0, min(s.offset+scrollDelta(key, ui.HighstatePageRows(m.highstateViewData())), ui.HighstateScrollLimit(m.highstateViewData())))
 	}
 	return m, nil
 }

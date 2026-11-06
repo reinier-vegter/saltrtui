@@ -12,7 +12,10 @@ import (
 	"saltrtui/internal/keys"
 )
 
-type fakeKeys struct{ calls int }
+type fakeKeys struct {
+	calls   int
+	actedOn []keys.Key
+}
 
 func (f *fakeKeys) ListKeys(context.Context) ([]keys.Key, error) {
 	return []keys.Key{{ID: "new-1", State: keys.Pending}, {ID: "web-01", State: keys.Accepted}}, nil
@@ -82,7 +85,11 @@ func TestKeyVerificationUsesCompleteSnapshot(t *testing.T) {
 func (f *fakeKeys) ReadKey(context.Context, keys.Key) (keys.Detail, error) {
 	return keys.Detail{Fingerprint: "aa:bb"}, nil
 }
-func (f *fakeKeys) ChangeKey(context.Context, keys.Key, keys.Action) error { f.calls++; return nil }
+func (f *fakeKeys) ChangeKey(_ context.Context, key keys.Key, _ keys.Action) error {
+	f.calls++
+	f.actedOn = append(f.actedOn, key)
+	return nil
+}
 
 func TestKeyManagementConfirmationAndResult(t *testing.T) {
 	backend := &fakeKeys{}

@@ -30,10 +30,10 @@ func eventListLines(v EventsViewData, width, capacity int) ([]string, int, strin
 	if len(v.Rows) == 0 {
 		text := "No events captured since app launch…"
 		if v.Status != "" {
-			text = "Listener unavailable; press r to retry"
+			text = "Listener unavailable"
 		}
 		if v.Query != "" || v.Family != "all" {
-			text = "No matching buffered events; change filter"
+			text = "No matching buffered events"
 		}
 		return []string{muted.Render(clip(text, width))}, 0, "Events 0/0"
 	}
@@ -64,7 +64,7 @@ func eventListLines(v EventsViewData, width, capacity int) ([]string, int, strin
 
 func eventDetailLines(v EventsViewData, width int) []string {
 	if v.Inspected < 0 || v.Inspected >= len(v.Rows) {
-		return styledLines([]string{"Select an event and press enter to inspect its payload.",
+		return styledLines([]string{"No event selected.",
 			"Event payloads can contain command arguments and return data."}, width)
 	}
 	row := v.Rows[v.Inspected]

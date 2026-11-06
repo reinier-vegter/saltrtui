@@ -219,18 +219,18 @@ func panel(title string, lines []string, offset, width, height int, focused bool
 
 func targetLines(v ViewData, width, capacity int) ([]string, int, string) {
 	if len(v.Rows) == 0 {
-		message := "No accepted keys · k Keys: pending"
+		message := "No accepted keys; pending keys appear in Keys"
 		switch {
 		case v.Inventory.Busy && v.Inventory.At.IsZero():
 			message = "Loading accepted keys…"
 		case v.Inventory.Err != nil && v.Inventory.At.IsZero():
-			message = "Inventory unavailable; press r to retry"
+			message = "Inventory unavailable"
 		case v.Inventory.At.IsZero():
 			message = "Inventory not loaded"
 		case v.Query != "":
-			message = "No matching IDs; clear search with backspace"
+			message = "No matching IDs"
 		}
-		return []string{muted.Render(clip(message, width))}, 0, "Targets 0/0"
+		return styledLines([]string{message}, width), 0, "Targets 0/0"
 	}
 	selectedIndex := 0
 	for i, row := range v.Rows {
@@ -273,13 +273,13 @@ func overviewLines(v ViewData, width int) []string {
 		"Connection presence is not job success.",
 	}
 	if v.Presence.Err != nil {
-		lines = append(lines, "Presence unavailable; press r to retry")
+		lines = append(lines, "Presence unavailable")
 	}
 	return styledLines(lines, width)
 }
 
 func detailLines(v ViewData, width int) []string {
-	lines := []string{"Select a minion and press enter to read grains."}
+	lines := []string{"No minion selected."}
 	if v.Selected != "" {
 		lines = []string{
 			"ID: " + v.Selected,
@@ -301,7 +301,7 @@ func detailLines(v ViewData, width int) []string {
 			sourceLine("Grains", v.Detail),
 		)
 		if v.Detail.At.IsZero() && !v.Detail.Busy && v.Detail.Err == nil {
-			lines = append(lines, "Press enter to fetch details")
+			lines = append(lines, "Grains not fetched yet.")
 		}
 	}
 	return styledLines(lines, width)
@@ -405,7 +405,7 @@ func grainLines(grains map[string]any, query string) []string {
 		}
 	}
 	if len(lines) == 0 {
-		return []string{"No grains match the Details search; clear it to show all."}
+		return []string{"No grains match the Details search."}
 	}
 	return lines
 }

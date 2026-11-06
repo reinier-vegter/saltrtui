@@ -183,7 +183,7 @@ func (m Model) updateTarget(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "ctrl+s":
 			if s.busy || s.stale || s.preview.Err != nil || s.preview.At.IsZero() || len(s.preview.Value.IDs) == 0 {
-				s.notice = "Preview a nonempty target before saving"
+				s.notice = "Target is not ready to save from the current preview"
 				return m, nil
 			}
 			m.savedTarget = &savedTarget{context: m.context, preview: s.preview.Value, at: s.preview.At}
@@ -220,7 +220,7 @@ func (m Model) updateTarget(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.targetEdit()
 				s.preview.Value = target.Preview{Mode: target.List, Expression: s.input.Value(), IDs: ids}
 				s.stale = true // Re-preview the effective list against fresh keys.
-				s.notice = "Removed ID; preview the effective specific-minion list again"
+				s.notice = "Target changed; its preview is stale"
 				return m, s.input.Focus()
 			}
 		}
